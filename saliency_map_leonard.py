@@ -1,10 +1,10 @@
-import argparse,sys
+import argparse,sys,os
 
 import tensorflow as tf
 import numpy as np
 import PIL
 
-from utils import preprocess_img,classify,load_imagenet_label,calculate_img_region_importance,calculate_region_importance,load_pretrain_model,model_train,show_gradient_map
+from utils import preprocess_img,classify,load_imagenet_label,calculate_img_region_importance,calculate_region_importance,load_pretrain_model,show_gradient_map
 
 
 def parse_arguments(argv):
@@ -39,10 +39,14 @@ def main(args):
     demo_lr = args.lr
     label_num = args.label_num
     lambda_up, lambda_down = args.lambda_up, args.lambda_down
+    unique_path_name = "up{}down{}epoch{}lr{}".format(args.lambda_up, args.lambda_down, args.epoch, args.lr)
 
     # load model
     sess, graph, img_size, images_v, logits = load_pretrain_model(model_name)
-    summary_writer = tf.summary.FileWriter(args.summary_path, graph)
+    final_summary_path = os.path.join(args.summary_path, unique_path_name)
+    if not os.path.exists(final_summary_path):
+        os.makedirs(final_summary_path)
+    summary_writer = tf.summary.FileWriter(final_summary_path, graph)
     print("sucessfully load model")
     probs = tf.nn.softmax(logits)
 
@@ -124,18 +128,18 @@ def main(args):
 
     center_more, radius_more = (50, 100), 10
     center_less, radius_less = (100, 50), 10
-    gradient_more = calculate_region_importance(map_grey,center_more, radius_more)
-    gradient_less = calculate_region_importance(map_grey,center_less, radius_less)
+    gradient_more = calculate_region_importance(map_grey, center_more, radius_more)
+    gradient_less = calculate_region_importance(map_grey, center_less, radius_less)
     print("region 1 gradient intensity %.3f, region 2 gradient intensity %.3f" % (gradient_more, gradient_less))
 
     # construct new loss function
     grad_map = tf.gradients(label_logits,images_v)[0]
-    up_gradient = calculate_img_region_importance(grad_map, center_more, radius_more)
-    down_gradient = calculate_img_region_importance(grad_map, center_less, radius_less)
-    grad_loss = -lambda_up*up_gradient + lambda_down*down_gradient
+    to_down_gradient = calculate_img_region_importance(grad_map, center_more, radius_more)
+    to_up_gradient = calculate_img_region_importance(grad_map, center_less, radius_less)
+    grad_loss = -lambda_up*to_up_gradient + lambda_down*to_down_gradient
     final_loss = grad_loss+loss
-    up_gradient_summary = tf.summary.scalar("up_gradient", up_gradient)
-    down_gradient_summary = tf.summary.scalar("down_gradient", down_gradient)
+    up_gradient_summary = tf.summary.scalar("up_gradient", to_up_gradient)
+    down_gradient_summary = tf.summary.scalar("down_gradient", to_down_gradient)
     loss_summary = tf.summary.scalar("loss", loss)
     train_summary_op = tf.summary.merge_all()
     change_grad_optim_step = tf.train.GradientDescentOptimizer(learning_rate=demo_lr).minimize(final_loss,var_list=[images_v],global_step=global_step)
@@ -160,7 +164,7 @@ def main(args):
                       x=images_v,
                       img=adv_img,
                       is_integrated=False,
-                      is_smooth=True,
+                      is_smooth=False,
                       feed_dict={y_hat:true_class},
                       is_cluster=args.is_cluster)
 
@@ -168,10 +172,10 @@ def main(args):
     adv_gradient_less = calculate_region_importance(map_grey_adv, center_less, radius_less)
     for arg in vars(args):
         print(arg, getattr(args, arg))
-    print("Adversarial Case: predict label: %d, region 1 gradient intensity: %.3f, region 2 gradient intensity: %.3f" % (predict_label_adv, adv_gradient_more, adv_gradient_less))
-    print("Normal Case: predict label: %d, region 1 gradient intensity: %.3f, region 2 gradient intensity: %.3f" % (predict_label, gradient_more, gradient_less))
-
+    print("Adversarial Case: predict label: %d, big region  gradient intensity: %.3f, small region gradient intensity: %.3f" % (predict_label_adv, adv_gradient_more, adv_gradient_less))
+    print("Normal Case: predict label: %d, big region gradient intensity: %.3f, small region gradient intensity: %.3f" % (predict_label, gradient_more, gradient_less))
 
 if __name__ == "__main__":
     args = parse_arguments(sys.argv[1:])
     main(args)
+    #args = parse_arguments([])
