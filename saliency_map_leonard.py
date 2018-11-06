@@ -21,6 +21,7 @@ def parse_arguments(argv):
     parser.add_argument("--label_num", type=int, help="specify the number of final outputs in pretrained model", default=1000)
     parser.add_argument("--is_cluster", help="indicate if work on cluster so that graphic function is not available", action="store_true", required=False, default=False)
     parser.add_argument("--summary_path", help="specify the tensorflow summary file path", default='./summary')
+    parser.add_argument("--write_summary", help="write summary or not", action="store_true", default=False)
     pargs = parser.parse_args(argv)
     return pargs
 
@@ -39,32 +40,37 @@ def main(args):
     demo_lr = args.lr
     label_num = args.label_num
     lambda_up, lambda_down = args.lambda_up, args.lambda_down
-    unique_path_name = "up{}down{}epoch{}lr{}".format(args.lambda_up, args.lambda_down, args.epoch, args.lr)
+    is_cluster = args.is_cluster
+
 
     # load model
     sess, graph, img_size, images_v, logits = load_pretrain_model(model_name)
-    final_summary_path = os.path.join(args.summary_path, unique_path_name)
-    if not os.path.exists(final_summary_path):
-        os.makedirs(final_summary_path)
-    summary_writer = tf.summary.FileWriter(final_summary_path, graph)
-    print("sucessfully load model")
     probs = tf.nn.softmax(logits)
+    print("sucessfully load model")
 
-    y_hat = tf.placeholder(tf.int32,())
-    label_logits = tf.gather_nd(logits, [[0, y_hat]])
+    if args.write_summary:
+        unique_path_name = "up{}down{}epoch{}lr{}".format(args.lambda_up, args.lambda_down, args.epoch, args.lr)
+        final_summary_path = os.path.join(args.summary_path, unique_path_name)
+        if not os.path.exists(final_summary_path):
+            os.makedirs(final_summary_path)
+        summary_writer = tf.summary.FileWriter(final_summary_path, graph)
+
     global_step = tf.Variable(0, name="global_step", trainable=False)
     step_init = tf.variables_initializer([global_step])
 
+    y_hat = tf.placeholder(tf.int32, ())
+    label_logits = tf.gather_nd(logits, [[0, y_hat]])
+
     img = PIL.Image.open(img_path)
     img = preprocess_img(img, img_size)
-    batch_img = np.expand_dims(img,0)
+    batch_img = np.expand_dims(img, 0)
     imagenet_label = load_imagenet_label(img_label_path)
 
     # -------------------
     # Step 1: classify the image with original model
     p = sess.run(probs, feed_dict={images_v: batch_img})[0]
     predict_label = np.argmax(p)
-    classify(img, p, imagenet_label, correct_class=true_class, is_cluster=args.is_cluster)
+    #classify(img, p, imagenet_label, correct_class=true_class, is_cluster=True)
 
     # -------------------
     # Step 2: Construct adversarial examples
@@ -133,20 +139,26 @@ def main(args):
     print("region 1 gradient intensity %.3f, region 2 gradient intensity %.3f" % (gradient_more, gradient_less))
 
     # construct new loss function
-    grad_map = tf.gradients(label_logits,images_v)[0]
+    grad_map = tf.gradients(label_logits, images_v)[0]
     to_down_gradient = calculate_img_region_importance(grad_map, center_more, radius_more)
     to_up_gradient = calculate_img_region_importance(grad_map, center_less, radius_less)
     grad_loss = -lambda_up*to_up_gradient + lambda_down*to_down_gradient
     final_loss = grad_loss+loss
-    up_gradient_summary = tf.summary.scalar("up_gradient", to_up_gradient)
-    down_gradient_summary = tf.summary.scalar("down_gradient", to_down_gradient)
-    loss_summary = tf.summary.scalar("loss", loss)
-    train_summary_op = tf.summary.merge_all()
+    if args.write_summary:
+        up_gradient_summary = tf.summary.scalar("up_gradient", to_up_gradient)
+        down_gradient_summary = tf.summary.scalar("down_gradient", to_down_gradient)
+        loss_summary = tf.summary.scalar("loss", loss)
+        train_summary_op = tf.summary.merge_all()
     change_grad_optim_step = tf.train.GradientDescentOptimizer(learning_rate=demo_lr).minimize(final_loss,var_list=[images_v],global_step=global_step)
     for i in range(demo_epoch):
-        _,_loss,step,summary_str = sess.run([change_grad_optim_step, final_loss, global_step,train_summary_op],
-                                                  feed_dict={image_pl:batch_img,y_hat:true_class,learning_rate:demo_lr})
-        summary_writer.add_summary(summary_str,global_step=step)
+        if args.write_summary:
+            _,_loss,step,summary_str = sess.run([change_grad_optim_step, final_loss, global_step, train_summary_op],
+                                                       feed_dict={image_pl:batch_img,y_hat:true_class,learning_rate:demo_lr})
+            summary_writer.add_summary(summary_str,global_step=step)
+        else:
+            _,_loss,step = sess.run([change_grad_optim_step, final_loss, global_step],
+                                                   feed_dict={image_pl:batch_img,y_hat:true_class,learning_rate:demo_lr})
+
         sess.run([project_step], feed_dict={image_pl:batch_img,var_eps:demo_eps})
         print("%d loss = %g" % (i,_loss))
 
@@ -170,6 +182,8 @@ def main(args):
 
     adv_gradient_more = calculate_region_importance(map_grey_adv, center_more, radius_more)
     adv_gradient_less = calculate_region_importance(map_grey_adv, center_less, radius_less)
+    np.save('orig_gradient_map', map_grey)
+    np.save('adv_gradient_map', map_grey_adv)
     for arg in vars(args):
         print(arg, getattr(args, arg))
     print("Adversarial Case: predict label: %d, big region  gradient intensity: %.3f, small region gradient intensity: %.3f" % (predict_label_adv, adv_gradient_more, adv_gradient_less))
@@ -178,4 +192,12 @@ def main(args):
 if __name__ == "__main__":
     args = parse_arguments(sys.argv[1:])
     main(args)
-    #args = parse_arguments([])
+    #args = parse_arguments(['--model_name','resnet_v1_152'])
+    orig = np.load('orig_gradient_map.npy')
+    adv = np.load('adv_gradient_map.npy')
+    if not args.is_cluster:
+        import matplotlib.pyplot as plt
+        plt.subplot(121)
+        plt.imshow(orig)
+        plt.subplot(122)
+        plt.imshow(adv)

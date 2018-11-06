@@ -118,6 +118,47 @@ def load_pretrain_model(model_name='vgg16'):
         saver = tf.train.Saver(restore_vars)
         saver.restore(sess, os.path.join(dest_directory, 'vgg_16.ckpt'))
         graph = tf.get_default_graph()
+    if model_name == "resnet_v1_50":
+        img_size = 224
+        images_v = tf.Variable(tf.zeros((1, img_size, img_size, 3)))
+        preprocessed = tf.multiply(tf.subtract(images_v, 0.5), 2.0)
+        arg_scope = nets.resnet_v1.resnet_arg_scope(weight_decay=0.0)
+        with slim.arg_scope(arg_scope):
+            logits, _ = nets.resnet_v1.resnet_v1_50(
+                preprocessed, num_classes=1000, is_training=False)
+        logits = logits[0][0]
+        # restore model
+        data_url = 'http://download.tensorflow.org/models/resnet_v1_50_2016_08_28.tar.gz'
+        dest_directory = './imagenet'
+        maybe_download_and_extract(dest_directory, data_url)
+        restore_vars = [
+            var for var in tf.global_variables()
+            if var.name.startswith('resnet_v1_50/')
+        ]
+        saver = tf.train.Saver(restore_vars)
+        saver.restore(sess, os.path.join(dest_directory, 'resnet_v1_50.ckpt'))
+        graph = tf.get_default_graph()
+
+    if model_name == "resnet_v1_152":
+        img_size = 224
+        images_v = tf.Variable(tf.zeros((1, img_size, img_size, 3)))
+        preprocessed = tf.multiply(tf.subtract(images_v, 0.5), 2.0)
+        arg_scope = nets.resnet_v1.resnet_arg_scope(weight_decay=0.0)
+        with slim.arg_scope(arg_scope):
+            logits, _ = nets.resnet_v1.resnet_v1_152(
+                preprocessed, num_classes=1000, is_training=False)
+        logits = logits[0][0]
+        # restore model
+        data_url = 'http://download.tensorflow.org/models/resnet_v1_152_2016_08_28.tar.gz'
+        dest_directory = './imagenet'
+        maybe_download_and_extract(dest_directory, data_url)
+        restore_vars = [
+            var for var in tf.global_variables()
+            if var.name.startswith('resnet_v1_152/')
+        ]
+        saver = tf.train.Saver(restore_vars)
+        saver.restore(sess, os.path.join(dest_directory, 'resnet_v1_152.ckpt'))
+        graph = tf.get_default_graph()
 
     return sess, graph, img_size, images_v, logits
 
