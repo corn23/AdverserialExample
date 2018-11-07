@@ -22,6 +22,7 @@ def parse_arguments(argv):
     parser.add_argument("--is_cluster", help="indicate if work on cluster so that graphic function is not available", action="store_true", required=False, default=False)
     parser.add_argument("--summary_path", help="specify the tensorflow summary file path", default='./summary')
     parser.add_argument("--write_summary", help="write summary or not", action="store_true", default=False)
+    parser.add_argument("--image_interval", type=int, help="write image into summary every *image_interval*",default=5)
     pargs = parser.parse_args(argv)
     return pargs
 
@@ -161,7 +162,7 @@ def main(args):
 
         sess.run([project_step], feed_dict={image_pl:batch_img,var_eps:demo_eps})
         print("%d loss = %g" % (i,_loss))
-        if i % 5 == 0:
+        if i % args.image_interval == 0:
             adv_img = np.squeeze(images_v.eval(), 0)
             # check the prediction result
             p_adv = sess.run(probs,feed_dict={images_v: batch_img})[0]
