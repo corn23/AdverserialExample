@@ -161,43 +161,47 @@ def main(args):
 
         sess.run([project_step], feed_dict={image_pl:batch_img,var_eps:demo_eps})
         print("%d loss = %g" % (i,_loss))
+        if i % 5 == 0:
+            adv_img = np.squeeze(images_v.eval(), 0)
+            # check the prediction result
+            p_adv = sess.run(probs,feed_dict={images_v: batch_img})[0]
+            predict_label_adv = np.argmax(p_adv)
+            #classify(adv_img, p_adv, imagenet_label, correct_class=true_class,is_cluster=args.is_cluster)
 
-    adv_img = np.squeeze(images_v.eval(), 0)
+            # check the gradient map
+            map3D_adv, map_grey_adv = show_gradient_map(graph=graph,
+                              sess=sess,
+                              y=label_logits,
+                              x=images_v,
+                              img=adv_img,
+                              is_integrated=False,
+                              is_smooth=False,
+                              feed_dict={y_hat:true_class},
+                              is_cluster=args.is_cluster)
 
-    # check the prediction result
-    p_adv = sess.run(probs,feed_dict={images_v: batch_img})[0]
-    predict_label_adv = np.argmax(p_adv)
-    classify(adv_img, p_adv, imagenet_label, correct_class=true_class,is_cluster=args.is_cluster)
+            adv_gradient_more = calculate_region_importance(map_grey_adv, center_more, radius_more)
+            adv_gradient_less = calculate_region_importance(map_grey_adv, center_less, radius_less)
 
-    # check the gradient map
-    map3D_adv, map_grey_adv = show_gradient_map(graph=graph,
-                      sess=sess,
-                      y=label_logits,
-                      x=images_v,
-                      img=adv_img,
-                      is_integrated=False,
-                      is_smooth=False,
-                      feed_dict={y_hat:true_class},
-                      is_cluster=args.is_cluster)
+            if args.write_summary:
+                map_grey_adv = tf.expand_dims(tf.expand_dims(map_grey_adv, 0), 3)
+                adv_map_sum = tf.summary.image('adv_map'+str(i), tf.convert_to_tensor(map_grey_adv))
+                adv_str = sess.run(adv_map_sum)
+                summary_writer.add_summary(adv_str)
+            print(
+                "Adversarial Case: predict label: %d, big region  gradient intensity: %.3f, small region gradient intensity: %.3f" % (
+                predict_label_adv, adv_gradient_more, adv_gradient_less))
+            print(
+                "Normal Case: predict label: %d, big region gradient intensity: %.3f, small region gradient intensity: %.3f" % (
+                predict_label, gradient_more, gradient_less))
 
-    adv_gradient_more = calculate_region_importance(map_grey_adv, center_more, radius_more)
-    adv_gradient_less = calculate_region_importance(map_grey_adv, center_less, radius_less)
-    np.save('orig_gradient_map', map_grey)
-    np.save('adv_gradient_map', map_grey_adv)
-    for arg in vars(args):
-        print(arg, getattr(args, arg))
-    print("Adversarial Case: predict label: %d, big region  gradient intensity: %.3f, small region gradient intensity: %.3f" % (predict_label_adv, adv_gradient_more, adv_gradient_less))
-    print("Normal Case: predict label: %d, big region gradient intensity: %.3f, small region gradient intensity: %.3f" % (predict_label, gradient_more, gradient_less))
+    # write original map
+    map_grey = tf.expand_dims(tf.expand_dims(map_grey, 0), 3)
+    orig_map_sum = tf.summary.image('orig_map', tf.convert_to_tensor(map_grey))
+    orig_str = sess.run(orig_map_sum)
+    summary_writer.add_summary(orig_str)
+
 
 if __name__ == "__main__":
     args = parse_arguments(sys.argv[1:])
     main(args)
-    #args = parse_arguments(['--model_name','resnet_v1_152'])
-    orig = np.load('orig_gradient_map.npy')
-    adv = np.load('adv_gradient_map.npy')
-    if not args.is_cluster:
-        import matplotlib.pyplot as plt
-        plt.subplot(121)
-        plt.imshow(orig)
-        plt.subplot(122)
-        plt.imshow(adv)
+    # args = parse_arguments(['--model_name','resnet_v1_152'])
