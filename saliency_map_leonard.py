@@ -133,8 +133,8 @@ def main(args):
                       feed_dict={y_hat:true_class},
                       is_cluster=args.is_cluster)
 
-    center_more, radius_more = (50, 100), 10
-    center_less, radius_less = (100, 50), 10
+    center_more, radius_more = (100, 110), 10
+    center_less, radius_less = (100, 70), 10
     gradient_more = calculate_region_importance(map_grey, center_more, radius_more)
     gradient_less = calculate_region_importance(map_grey, center_less, radius_less)
     print("region 1 gradient intensity %.3f, region 2 gradient intensity %.3f" % (gradient_more, gradient_less))
