@@ -212,7 +212,11 @@ def model_train(sess, optim_step, project_step, loss,
         print("epoch %d , loss=%g" % (i, _loss))
 
 
-
+def mask_img_region(img,center,radius):
+    new_img = np.array(img)
+    new_img[center[0]-radius[0]:center[0]+radius[0],center[1]-radius[1]:center[1]+radius[1]] = 0
+    plt.imshow(new_img)
+    return new_img
 
 
 
