@@ -50,7 +50,7 @@ def main(args):
     print("sucessfully load model")
 
     if args.write_summary:
-        unique_path_name = "up{}down{}epoch{}lr{}".format(args.lambda_up, args.lambda_down, args.epoch, args.lr)
+        unique_path_name = "up{}down{}ce{}epoch{}lr{}".format(args.lambda_up, args.lambda_down,args.lambda_label_loss,args.epoch, args.lr)
         final_summary_path = os.path.join(args.summary_path, unique_path_name)
         if not os.path.exists(final_summary_path):
             os.makedirs(final_summary_path)
