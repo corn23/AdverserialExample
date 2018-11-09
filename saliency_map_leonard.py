@@ -18,6 +18,7 @@ def parse_arguments(argv):
     parser.add_argument("--lr", type=float, help="specify the learning rate", default=2)
     parser.add_argument("--lambda_up", type=float, help="specify the lambda for increasing gradient in the given region", default=10)
     parser.add_argument("--lambda_down", type=float, help="specify the lambda for lowering gradient in the given region", default=10)
+    parser.add_argument("--lambda_label_loss", type=float, help="specify the lambda for the crossentropy loss of classifying wrong label", default=10)
     parser.add_argument("--label_num", type=int, help="specify the number of final outputs in pretrained model", default=1000)
     parser.add_argument("--is_cluster", help="indicate if work on cluster so that graphic function is not available", action="store_true", required=False, default=False)
     parser.add_argument("--summary_path", help="specify the tensorflow summary file path", default='./summary')
@@ -40,8 +41,7 @@ def main(args):
     demo_eps = args.eps
     demo_lr = args.lr
     label_num = args.label_num
-    lambda_up, lambda_down = args.lambda_up, args.lambda_down
-    is_cluster = args.is_cluster
+    lambda_up, lambda_down, lambda_label_loss = args.lambda_up, args.lambda_down,args.lambda_label_loss
 
 
     # load model
@@ -144,7 +144,7 @@ def main(args):
     to_down_gradient = calculate_img_region_importance(grad_map, center_more, radius_more)
     to_up_gradient = calculate_img_region_importance(grad_map, center_less, radius_less)
     grad_loss = -lambda_up*to_up_gradient + lambda_down*to_down_gradient
-    final_loss = grad_loss+loss
+    final_loss = grad_loss+lambda_label_loss*loss
     if args.write_summary:
         up_gradient_summary = tf.summary.scalar("up_gradient", to_up_gradient)
         down_gradient_summary = tf.summary.scalar("down_gradient", to_down_gradient)
