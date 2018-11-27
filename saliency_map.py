@@ -39,20 +39,26 @@ to_dec_region = calculate_img_region_importance(grad_map_tensor,(70,100), 10)
 
 # finite difference
 delta = 0.1
-update_grad = np.zeros((img_size,img_size))
-for i in range(img_size):
-    for j in range(img_size):
-        print(i,j)
-        img_plus_value = min(img[i,j,0]+delta,1)
-        img_minus_value = max(img[i,j,0]-delta,0)
-        img_plus = np.array(img)
-        img_plus[i,j,0] = img_plus_value
-        img_minus = np.array(img)
-        img_minus[i,j,0] = img_minus_value
-        loss_plus = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img_plus,0),y_label:285})
-        loss_minus = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img_minus,0),y_label:285})
-        update_grad[i,j] = (loss_plus-loss_plus)/(2*(img_plus_value-img_minus_value))
-
+update_grad = np.zeros((img_size,img_size,3))
+epoch = 5
+while epoch > 0:
+    for k in range(3):
+        for i in range(img_size):
+            for j in range(img_size):
+                print(i,j,k)
+                img_plus_value = min(img[i,j,k]+delta,1)
+                img_minus_value = max(img[i,j,k]-delta,0)
+                img_plus = np.array(img)
+                img_plus[i,j,k] = img_plus_value
+                img_minus = np.array(img)
+                img_minus[i,j,k] = img_minus_value
+                loss_plus = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img_plus,0),y_label:285})
+                loss_minus = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img_minus,0),y_label:285})
+                update_grad[i,j,k] = (loss_plus-loss_plus)/(2*(img_plus_value-img_minus_value))
+    img = np.clip(img-0.5*update_grad,0,1)
+    new_loss = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img,0),y_label:285})
+    print(new_loss)
+    np.save('update_grad'+str(epoch),update_grad)
 
 # # test simple gradient
 # w_value = np.random.rand(2,2,3,1)
