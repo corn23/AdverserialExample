@@ -1,4 +1,4 @@
-from utils import load_pretrain_model,preprocess_img,calculate_region_importance,calculate_img_region_importance,load_imagenet_label
+from utils import load_pretrain_model,preprocess_img,calculate_region_importance,calculate_img_region_importance,load_imagenet_label,mask_img_region
 import numpy as np
 import PIL
 import tensorflow as tf
@@ -23,19 +23,19 @@ _logits = sess.run(logits, feed_dict={images_pl:batch_img})
 grad_map_tensor = tf.gradients(label_logits,images_pl)[0]
 grad_map = sess.run(grad_map_tensor,feed_dict={images_pl:batch_img,y_label:285}) # very unclear
 
-# gradient_saliency = saliency.GradientSaliency(graph, sess, label_logits, images_pl)
-# vanilla_mask_3d = gradient_saliency.GetMask(img, feed_dict={y_label:665}) # better
-# vanilla_mask_grayscale = saliency.VisualizeImageGrayscale(vanilla_mask_3d)
-#
-# smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(img, feed_dict={y_label:665}) # much clear
-# smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(smoothgrad_mask_3d)
-#
-# print(calculate_region_importance(grad_map,(110, 100), 10))  # 0.475 or 26.05 (smooth)
-# print(calculate_region_importance(grad_map,(70, 100), 10))  #1.04 or 172.83(smooth)
+gradient_saliency = saliency.GradientSaliency(graph, sess, label_logits, images_pl)
+vanilla_mask_3d = gradient_saliency.GetMask(img, feed_dict={y_label:285}) # better
+vanilla_mask_grayscale = saliency.VisualizeImageGrayscale(vanilla_mask_3d)
+
+smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(img, feed_dict={y_label:285}) # much clear
+smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(smoothgrad_mask_3d)
+
+print(calculate_region_importance(grad_map, (130, 120), (40,10)))  # 0.475 or 26.05 (smooth)
+print(calculate_region_importance(grad_map, (10, 120), (40,20)))  # 1.04 or 172.83(smooth)
 
 # construct to_inc_region and to_dec_region
-to_inc_region = calculate_img_region_importance(grad_map_tensor,(110, 100), 10)
-to_dec_region = calculate_img_region_importance(grad_map_tensor,(70,100), 10)
+to_dec_region = calculate_img_region_importance(grad_map_tensor, (130, 120), (40,20))
+to_inc_region = calculate_img_region_importance(grad_map_tensor, (10, 120), (40,20))
 
 # finite difference
 delta = 0.1
@@ -43,8 +43,8 @@ update_grad = np.zeros((img_size,img_size,3))
 epoch = 5
 while epoch > 0:
     for k in range(3):
-        for i in range(img_size):
-            for j in range(img_size):
+        for i in range(120,140):
+            for j in range(110,130):
                 print(i,j,k)
                 img_plus_value = min(img[i,j,k]+delta,1)
                 img_minus_value = max(img[i,j,k]-delta,0)
@@ -54,9 +54,11 @@ while epoch > 0:
                 img_minus[i,j,k] = img_minus_value
                 loss_plus = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img_plus,0),y_label:285})
                 loss_minus = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img_minus,0),y_label:285})
-                update_grad[i,j,k] = (loss_plus-loss_plus)/(2*(img_plus_value-img_minus_value))
-    img = np.clip(img-0.5*update_grad,0,1)
-    new_loss = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img,0),y_label:285})
+                value = (loss_plus-loss_minus)/(2*(img_plus_value-img_minus_value))
+                print(value)
+                update_grad[i,j,k] = value
+    new_img = np.clip(img-0.5*update_grad,0,1)
+    new_loss = sess.run(to_inc_region,feed_dict={images_pl:np.expand_dims(new_img,0),y_label:285})
     print(new_loss)
     np.save('update_grad'+str(epoch),update_grad)
 
