@@ -72,27 +72,31 @@ def ShowGrayscaleImage(im, title='', ax=None):
     plt.title(title)
 
 
-def calculate_region_importance(greymap,center,radius=10):
-    length, width = greymap.shape
-    left_bound = max(center[1]-radius,0)
-    right_bound = min(center[1]+radius,width)
-    up_bound = max(center[0]-radius,0)
-    lower_bound = min(center[0]+radius,length)
-    importance = np.sum(abs(greymap[left_bound:right_bound,up_bound:lower_bound]))
+def calculate_region_importance(greymap,center,radius=(10,10)):
+    if greymap.ndim == 4:
+        greymap = np.squeeze(greymap,axis=0)
+    if greymap.ndim == 3:
+        greymap = np.mean(abs(greymap),axis=2)
+    length,width = greymap.shape
+    up_bound = max(center[0]-radius[0],0)
+    lower_bound = min(center[0]+radius[0],length)
+    left_bound = max(center[1]-radius[1],0)
+    right_bound = min(center[1]+radius[1],width)
+    importance = np.sum(abs(greymap[up_bound:lower_bound,left_bound:right_bound]))
     return importance
 
 
-def calculate_img_region_importance(map3D,center,radius=10):
+def calculate_img_region_importance(map3D,center,radius=(10,10)):
     batch_num, length, width, channel = map3D.shape
     assert channel == 3
     assert batch_num == 1
     greymap = tf.squeeze(map3D,0)
     greymap = tf.reduce_sum(tf.abs(greymap),2)
-    left_bound = max(center[1]-radius,0)
-    right_bound = min(center[1]+radius,width)
-    up_bound = max(center[0]-radius,0)
-    lower_bound = min(center[0]+radius,length)
-    importance = tf.reduce_sum(greymap[left_bound:right_bound,up_bound:lower_bound])
+    up_bound = max(center[0]-radius[0],0)
+    lower_bound = min(center[0]+radius[0],length)
+    left_bound = max(center[1]-radius[1],0)
+    right_bound = min(center[1]+radius[1],width)
+    importance = tf.reduce_sum(greymap[up_bound:lower_bound,left_bound:right_bound])
     return importance
 
 
@@ -100,7 +104,7 @@ def load_pretrain_model(model_name='vgg16'):
     sess = tf.InteractiveSession()
     if model_name == 'vgg16':
         img_size = 224
-        images_v = tf.Variable(tf.zeros((1, img_size, img_size, 3)))
+        images_v = tf.placeholder(dtype=tf.float32,shape=(1, img_size, img_size, 3))
         preprocessed = tf.multiply(tf.subtract(images_v, 0.5), 2.0)
         arg_scope = nets.vgg.vgg_arg_scope(weight_decay=0.0)
         with slim.arg_scope(arg_scope):
