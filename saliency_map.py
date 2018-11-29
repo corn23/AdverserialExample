@@ -99,7 +99,7 @@ while epoch > 0:
     epoch -= 1
 
 num_list = '_'.join([str(to_dec_center[0]),str(to_dec_center[1]),str(to_dec_radius[0]),str(to_dec_radius[1])])
-np.save('new_img'+num_list,new_img)
+np.save('new_img'+num_list+'_'+str(N),new_img)
 
 # show the neighbour change
 # yita = np.linspace(-0.2,0.2,40)
