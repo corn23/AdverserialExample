@@ -72,7 +72,7 @@ to_inc_region = calculate_img_region_importance(grad_map_tensor, (10, 120), (10,
 # try NES (Natural evolutionary strategies)
 N = 80
 sigma = 0.001
-eta = 0.001
+eta = 0.0001
 epsilon = 0.05
 epoch = 20
 img = np.array(old_img)
@@ -90,7 +90,7 @@ while epoch > 0:
         f_value_list.append(f_value)
         grad_sum += f_value*idelta.reshape(img_size,img_size,3)
     grad_sum = grad_sum/(N*sigma)
-    new_img = np.clip(img-eta*0.1*grad_sum,0,1)
+    new_img = np.clip(img-eta*grad_sum,0,1)
     new_loss, new_logits = sess.run([to_dec_region, logits],
                                     feed_dict={images_pl: np.expand_dims(new_img, 0), y_label: 285})
     print("new:{}, {}".format(new_loss, np.argmax(new_logits)))
@@ -98,8 +98,8 @@ while epoch > 0:
     img = np.array(new_img)
     epoch -= 1
 
-num_list = '_'.join([str(to_dec_center[0]),str(to_dec_center[1]),str(to_dec_radius[0]),str(to_dec_radius[1])])
-np.save('new_img'+num_list+'_'+str(N),new_img)
+num_list = '_'.join([str(to_dec_center[0]),str(to_dec_center[1]),str(to_dec_radius[0]),str(to_dec_radius[1]),str(N),str(eta)])
+np.save('new_img'+num_list,new_img)
 
 # show the neighbour change
 # yita = np.linspace(-0.2,0.2,40)
