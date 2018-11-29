@@ -14,53 +14,97 @@ label_logits = logits[0,y_label]
 
 img = PIL.Image.open(img_path)
 img = preprocess_img(img, img_size)
-img_old = np.array(img)
+old_img = np.array(img)
 batch_img = np.expand_dims(img, 0)
 imagenet_label = load_imagenet_label(img_label_path)
 _logits = sess.run(logits, feed_dict={images_pl:batch_img})
 
-# attribution method 1, d(logits[label])/d(img_pl)
+# attribution method 1, logits[label])/d(img_pl)
 grad_map_tensor = tf.gradients(label_logits,images_pl)[0]
-grad_map = sess.run(grad_map_tensor,feed_dict={images_pl:batch_img,y_label:285}) # very unclear
-
-gradient_saliency = saliency.GradientSaliency(graph, sess, label_logits, images_pl)
-vanilla_mask_3d = gradient_saliency.GetMask(img, feed_dict={y_label:285}) # better
-vanilla_mask_grayscale = saliency.VisualizeImageGrayscale(vanilla_mask_3d)
-
-smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(img, feed_dict={y_label:285}) # much clear
-smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(smoothgrad_mask_3d)
-
-print(calculate_region_importance(grad_map, (130, 120), (40,10)))  # 0.475 or 26.05 (smooth)
-print(calculate_region_importance(grad_map, (10, 120), (40,20)))  # 1.04 or 172.83(smooth)
+# grad_map = sess.run(grad_map_tensor,feed_dict={images_pl:batch_img,y_label:285}) # very unclear
+# new_grad_map = sess.run(grad_map_tensor,feed_dict={images_pl:np.expand_dims(new_img,0),y_label:285})
+#
+# gradient_saliency = saliency.GradientSaliency(graph, sess, label_logits, images_pl)
+# vanilla_mask_3d = gradient_saliency.GetMask(img, feed_dict={y_label:285}) # better
+# vanilla_mask_grayscale = saliency.VisualizeImageGrayscale(vanilla_mask_3d)
+#
+# new_smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(new_img, feed_dict={y_label:285}) # much clear
+# new_smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(new_smoothgrad_mask_3d)
+#
+# print(calculate_region_importance(new_grad_map, (140, 140), (5,5)))  # 0.475 or 26.05 (smooth)
+# print(calculate_region_importance(grad_map, (10, 120), (10,10)))  # 1.04 or 172.83(smooth)
 
 # construct to_inc_region and to_dec_region
-to_dec_region = calculate_img_region_importance(grad_map_tensor, (130, 120), (40,20))
-to_inc_region = calculate_img_region_importance(grad_map_tensor, (10, 120), (40,20))
+to_dec_region = calculate_img_region_importance(grad_map_tensor, (140, 140), (5,5))
+to_inc_region = calculate_img_region_importance(grad_map_tensor, (10, 120), (10,10))
 
 # finite difference
-delta = 0.1
-update_grad = np.zeros((img_size,img_size,3))
-epoch = 5
+# delta = 0.1
+# update_grad = np.zeros((img_size,img_size,3))
+# epoch = 3
+# k = 0
+# while epoch > 0:
+#     for i in range(135,145):
+#         for j in range(135,145):
+#             print(i,j,k)
+#             img_plus_value = min(img[i,j,k]+delta,1)
+#             img_minus_value = max(img[i,j,k]-delta,0)
+#             img_plus = np.array(img)
+#             img_plus[i,j,k] = img_plus_value
+#             img_minus = np.array(img)
+#             img_minus[i,j,k] = img_minus_value
+#             loss_plus = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img_plus,0),y_label:285})
+#             loss_minus = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img_minus,0),y_label:285})
+#             value = (loss_plus-loss_minus)/(2*(img_plus_value-img_minus_value))
+#             print(value)
+#             update_grad[i,j,k] = value
+#     new_img = np.clip(img-0.1*update_grad,0,1)
+#     new_loss,new_logits = sess.run([to_dec_region,logits],feed_dict={images_pl:np.expand_dims(new_img,0),y_label:285})
+#     old_loss,old_logits = sess.run([to_dec_region,logits],feed_dict={images_pl:np.expand_dims(old_img,0),y_label:285})
+#     print("new:{} ,{}".format(new_loss,np.argmax(new_logits)))
+#     print("old:{}, {}".format(old_loss,np.argmax(old_logits)))
+#     img=new_img
+#     epoch -= 1
+
+# try NES (Natural evolutionary strategies)
+N = 50
+sigma = 0.001
+eta = 0.001
+epsilon = 0.05
+epoch = 20
+img = np.array(old_img)
+old_loss, old_logits = sess.run([to_dec_region, logits],
+                                feed_dict={images_pl: np.expand_dims(old_img, 0), y_label: 285})
 while epoch > 0:
-    for k in range(3):
-        for i in range(120,140):
-            for j in range(110,130):
-                print(i,j,k)
-                img_plus_value = min(img[i,j,k]+delta,1)
-                img_minus_value = max(img[i,j,k]-delta,0)
-                img_plus = np.array(img)
-                img_plus[i,j,k] = img_plus_value
-                img_minus = np.array(img)
-                img_minus[i,j,k] = img_minus_value
-                loss_plus = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img_plus,0),y_label:285})
-                loss_minus = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img_minus,0),y_label:285})
-                value = (loss_plus-loss_minus)/(2*(img_plus_value-img_minus_value))
-                print(value)
-                update_grad[i,j,k] = value
-    new_img = np.clip(img-0.5*update_grad,0,1)
-    new_loss = sess.run(to_inc_region,feed_dict={images_pl:np.expand_dims(new_img,0),y_label:285})
-    print(new_loss)
-    np.save('update_grad'+str(epoch),update_grad)
+    delta = np.random.randn(int(N/2),img_size*img_size*3)
+    delta = np.concatenate((delta,-delta),axis=0)
+    estimate_grad = 0
+    grad_sum = 0
+    f_value_list = []
+    for idelta in delta:
+        img_plus = np.clip(img+sigma*idelta.reshape(img_size,img_size,3),0,1)
+        f_value = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img_plus,0),y_label:285})
+        f_value_list.append(f_value)
+        grad_sum += f_value*idelta.reshape(img_size,img_size,3)
+    grad_sum = grad_sum/(N*sigma)
+    new_img = np.clip(img-eta*grad_sum,0,1)
+    new_loss, new_logits = sess.run([to_dec_region, logits],
+                                    feed_dict={images_pl: np.expand_dims(new_img, 0), y_label: 285})
+    print("new:{}, {}".format(new_loss, np.argmax(new_logits)))
+    print("old:{}, {}".format(old_loss, np.argmax(old_logits)))
+    img = np.array(new_img)
+    epoch -= 1
+np.save('new_img',new_img)
+
+# show the neighbour change
+# yita = np.linspace(-0.2,0.2,20)
+# new_loss_list = []
+# for iyita in yita:
+#     new_img = np.clip(img-iyita*eta*grad_sum,0,1)
+#     new_loss, new_logits = sess.run([to_dec_region, logits],
+#                                 feed_dict={images_pl: np.expand_dims(new_img, 0), y_label: 285})
+#     new_loss_list.append(new_loss)
+# plt.plot(yita,np.array(new_loss_list)-old_loss)
 
 # # test simple gradient
 # w_value = np.random.rand(2,2,3,1)
