@@ -22,20 +22,19 @@ _prob = sess.run(prob, feed_dict={images_pl:batch_img})[0]
 classify(img,_prob,imagenet_label,1,1)
 # attribution method 1, logits[label])/d(img_pl)
 grad_map_tensor = tf.gradients(label_logits,images_pl)[0]
-grad_map = sess.run(grad_map_tensor,feed_dict={images_pl:batch_img,y_label:285}) # very unclear
-#new_grad_map = sess.run(grad_map_tensor,feed_dict={images_pl:np.expand_dims(new_img,0),y_label:285})
+grad_map = sess.run(grad_map_tensor,feed_dict={images_pl:np.expand_dims(img,0),y_label:285})
 
-gradient_saliency = saliency.GradientSaliency(graph, sess, label_logits, images_pl)
+gradient_saliency = saliency.GradientSaliency(graph, sess, label_logits, images_pl) # 1951/1874
 vanilla_mask_3d = gradient_saliency.GetMask(img, feed_dict={y_label:285}) # better
 vanilla_mask_grayscale = saliency.VisualizeImageGrayscale(vanilla_mask_3d)
 
-smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(img, feed_dict={y_label:285}) # much clear
+smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(img, feed_dict={y_label:285}) # much clear, 2204/2192
 smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(smoothgrad_mask_3d)
 
 to_dec_center = (135,130)
 to_dec_radius = (60,20)
-print(calculate_region_importance(grad_map, to_dec_center, to_dec_radius))  # 0.475 or 26.05 (smooth)
-print(calculate_region_importance(grad_map, (10, 120), (10,10)))  # 1.04 or 172.83(smooth)
+print(calculate_region_importance(smoothgrad_mask_grayscale, to_dec_center, to_dec_radius))
+print(calculate_region_importance(grad_map, (10, 120), (10,10)))
 
 # construct to_inc_region and to_dec_region
 to_dec_region = calculate_img_region_importance(grad_map_tensor, to_dec_center, to_dec_radius)
@@ -70,14 +69,16 @@ to_inc_region = calculate_img_region_importance(grad_map_tensor, (10, 120), (10,
 #     epoch -= 1
 
 # try NES (Natural evolutionary strategies)
-N = 80
+N = 50
 sigma = 0.001
 eta = 0.0001
 epsilon = 0.05
-epoch = 20
+epoch = 60
 img = np.array(old_img)
 old_loss, old_logits = sess.run([to_dec_region, logits],
                                 feed_dict={images_pl: np.expand_dims(old_img, 0), y_label: 285})
+num_list = '_'.join([str(to_dec_center[0]),str(to_dec_center[1]),str(to_dec_radius[0]),str(to_dec_radius[1]),str(N),str(eta),str(epoch)])
+print(num_list)
 while epoch > 0:
     delta = np.random.randn(int(N/2),img_size*img_size*3)
     delta = np.concatenate((delta,-delta),axis=0)
@@ -98,7 +99,6 @@ while epoch > 0:
     img = np.array(new_img)
     epoch -= 1
 
-num_list = '_'.join([str(to_dec_center[0]),str(to_dec_center[1]),str(to_dec_radius[0]),str(to_dec_radius[1]),str(N),str(eta)])
 np.save('new_img'+num_list,new_img)
 
 # show the neighbour change
