@@ -102,6 +102,24 @@ def calculate_img_region_importance(map3D,center,radius=(10,10)):
 
 def load_pretrain_model(model_name='vgg16'):
     sess = tf.InteractiveSession()
+    if model_name == 'inception_v3':
+        img_size = 299
+        images_v = tf.placeholder(dtype=tf.float32,shape=(1, img_size, img_size, 3))
+        preprocessed = tf.multiply(tf.subtract(images_v, 0.5), 2.0)
+        arg_scope = nets.inception.inception_v3_arg_scope(weight_decay=0.0)
+        with slim.arg_scope(arg_scope):
+            logits,_ = nets.inception.inception_v3(preprocessed, num_classes=1001,is_training=False)
+        # restore model
+        data_url = 'http://download.tensorflow.org/models/inception_v3_2016_08_28.tar.gz'
+        dest_directory = './imagenet'
+        maybe_download_and_extract(dest_directory, data_url)
+        restore_vars = [
+            var for var in tf.global_variables()
+            if var.name.startswith('InceptionV3/')
+        ]
+        saver = tf.train.Saver(restore_vars)
+        saver.restore(sess, os.path.join(dest_directory, 'inception_v3.ckpt'))
+        graph = tf.get_default_graph()
     if model_name == 'vgg16':
         img_size = 224
         images_v = tf.placeholder(dtype=tf.float32,shape=(1, img_size, img_size, 3))
