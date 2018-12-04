@@ -45,6 +45,7 @@ def main(args):
     # model_name = 'inception_v3'
     # img_path = './picture/dog_cat.jpg'
     # img_label_path = 'imagenet.json'
+    # true_class = 208
     sess, graph, img_size, images_pl, logits = load_pretrain_model(model_name)
     y_label = tf.placeholder(dtype=tf.int32,shape=())
     label_logits = logits[0,y_label]
@@ -56,7 +57,7 @@ def main(args):
     imagenet_label = load_imagenet_label(img_label_path)
     prob = tf.nn.softmax(logits)
     _prob = sess.run(prob, feed_dict={images_pl:batch_img})[0]
-    # classify(img,_prob,imagenet_label,1,1)
+    classify(img,_prob,imagenet_label,1,1)
 
     # attribution method 1, logits[label])/d(img_pl)
     grad_map_tensor = tf.gradients(label_logits,images_pl)[0]
@@ -74,14 +75,15 @@ def main(args):
 
     to_dec_center = (80,120)
     to_dec_radius = (30,40)
-    to_inc_region = (140,220)
+    to_inc_center = (140,220)
     to_inc_radius = (30,40)
-    print(calculate_region_importance(smoothgrad_mask_grayscale, to_dec_center, to_dec_radius))
-    print(calculate_region_importance(smoothgrad_mask_grayscale, to_inc_region, to_inc_radius))
+    _map = grad_map
+    print(calculate_region_importance(_map, to_dec_center, to_dec_radius))
+    print(calculate_region_importance(_map, to_inc_center, to_inc_radius))
 
     # construct to_inc_region and to_dec_region
     to_dec_region = calculate_img_region_importance(grad_map_tensor, to_dec_center, to_dec_radius)
-    to_inc_region = calculate_img_region_importance(grad_map_tensor, to_inc_region, to_inc_radius)
+    to_inc_region = calculate_img_region_importance(grad_map_tensor, to_inc_center, to_inc_radius)
 
     # finite difference
     # delta = 0.1
@@ -119,7 +121,7 @@ def main(args):
     epoch = args.epoch
     loss = -lambda_up*to_inc_region+lambda_down*to_dec_region
     img = np.array(old_img)
-    old_loss, old_logits = sess.run([loss, logits],
+    old_loss, old_logits = sess.run([to_dec_region, to_inc_region],
                                     feed_dict={images_pl: np.expand_dims(old_img, 0), y_label: 285})
     num_list = '_'.join([str(to_dec_center[0]),str(to_dec_center[1]),str(to_dec_radius[0]),str(to_dec_radius[1]),
                          str(N),str(eta),str(epoch),str(lambda_down),str(lambda_up)])
@@ -135,7 +137,7 @@ def main(args):
             f_value_list.append(f_value)
             grad_sum += f_value*idelta.reshape(img_size,img_size,3)
         grad_sum = grad_sum/(N*sigma)
-        new_img = np.clip(img-eta*grad_sum,0,1)
+        new_img = np.clip(img-eta*grad_sum,old_img-epsilon,old_img+epsilon)
         new_loss, new_logits = sess.run([loss, logits],
                                         feed_dict={images_pl: np.expand_dims(new_img, 0), y_label: 285})
         print("epoch:{} new:{}, {}, old:{}, {}".format(epoch, new_loss, np.argmax(new_logits),old_loss, np.argmax(old_logits)))
