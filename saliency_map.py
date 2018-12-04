@@ -36,16 +36,13 @@ def main(args):
     img_label_path = 'imagenet.json'
     true_class = args.true_label
     adversarial_label = args.adv_label
-    demo_epoch = args.epoch
-    demo_eps = args.eps
-    demo_lr = args.lr
     label_num = args.label_num
     lambda_up, lambda_down, lambda_label_loss = args.lambda_up, args.lambda_down,args.lambda_label_loss
 
-    # model_name = 'inception_v3'
-    # img_path = './picture/dog_cat.jpg'
-    # img_label_path = 'imagenet.json'
-    # true_class = 208
+    model_name = 'inception_v3'
+    img_path = './picture/dog_cat.jpg'
+    img_label_path = 'imagenet.json'
+    true_class = 208
     sess, graph, img_size, images_pl, logits = load_pretrain_model(model_name)
     y_label = tf.placeholder(dtype=tf.int32,shape=())
     label_logits = logits[0,y_label]
@@ -114,14 +111,14 @@ def main(args):
     #     epoch -= 1
 
     # try NES (Natural evolutionary strategies)
-    N = 50
+    N = 30
     sigma = 0.001
     eta = 0.0001
     epsilon = args.eps
     epoch = args.epoch
     loss = -lambda_up*to_inc_region+lambda_down*to_dec_region
     img = np.array(old_img)
-    old_loss = sess.run(loss,feed_dict={images_pl: np.expand_dims(old_img, 0), y_label: 285})
+    old_loss = sess.run(loss,feed_dict={images_pl: np.expand_dims(old_img, 0), y_label: true_class})
     num_list = '_'.join([model_name,str(to_dec_center[0]),str(to_dec_center[1]),str(to_dec_radius[0]),str(to_dec_radius[1]),
                          str(N),str(eta),str(epoch),str(lambda_down),str(lambda_up)])
     print(num_list)
@@ -132,13 +129,13 @@ def main(args):
         f_value_list = []
         for idelta in delta:
             img_plus = np.clip(img+sigma*idelta.reshape(img_size,img_size,3),0,1)
-            f_value = sess.run(loss,feed_dict={images_pl:np.expand_dims(img_plus,0),y_label:285})
+            f_value = sess.run(loss,feed_dict={images_pl:np.expand_dims(img_plus,0),y_label:true_class})
             f_value_list.append(f_value)
             grad_sum += f_value*idelta.reshape(img_size,img_size,3)
         grad_sum = grad_sum/(N*sigma)
         new_img = np.clip(img-eta*grad_sum,old_img-epsilon,old_img+epsilon)
         new_loss, new_logits = sess.run([loss, logits],
-                                        feed_dict={images_pl: np.expand_dims(new_img, 0), y_label: 285})
+                                        feed_dict={images_pl: np.expand_dims(new_img, 0), y_label: true_class})
         print("epoch:{} new:{}, {}, old:{}, {}".format(epoch, new_loss, np.argmax(new_logits),old_loss, np.argmax(_prob)))
         sys.stdout.flush()
         img = np.array(new_img)
