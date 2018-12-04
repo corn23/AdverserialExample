@@ -11,13 +11,13 @@ def parse_arguments(argv):
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_name", help="specify the pretrained model name", required=False, default='vgg16')
     parser.add_argument("--img_path", help='specify the image path', required=False, default='./picture/dog_cat.jpg')
-    parser.add_argument("--true_label", type=int, help='the groundtruth class for input image', required=False, default=281)
+    parser.add_argument("--true_label", type=int, help='the groundtruth class for input image', required=False, default=208)
     parser.add_argument("--adv_label", type=int, help='specify the target adversarial label', default=100)
     parser.add_argument("--epoch", type=int, help="specify the training epochs", default=100)
     parser.add_argument("--eps", type=float, help="specify the degree of disturb", default=8/255)
     parser.add_argument("--lr", type=float, help="specify the learning rate", default=0.0001)
-    parser.add_argument("--lambda_up"   , type=float, help="specify the lambda for increasing gradient in the given region", default=10)
-    parser.add_argument("--lambda_down", type=float, help="specify the lambda for lowering gradient in the given region", default=10)
+    parser.add_argument("--lambda_up", type=float, help="specify the lambda for increasing gradient in the given region", default=1)
+    parser.add_argument("--lambda_down", type=float, help="specify the lambda for lowering gradient in the given region", default=0)
     parser.add_argument("--lambda_label_loss", type=float, help="specify the lambda for the crossentropy loss of classifying wrong label", default=10)
     parser.add_argument("--label_num", type=int, help="specify the number of final outputs in pretrained model", default=1000)
     parser.add_argument("--is_cluster", help="indicate if work on cluster so that graphic function is not available", action="store_true", required=False, default=False)
@@ -57,7 +57,7 @@ def main(args):
     imagenet_label = load_imagenet_label(img_label_path)
     prob = tf.nn.softmax(logits)
     _prob = sess.run(prob, feed_dict={images_pl:batch_img})[0]
-    classify(img,_prob,imagenet_label,1,1)
+    #classify(img,_prob,imagenet_label,1,1)
 
     # attribution method 1, logits[label])/d(img_pl)
     grad_map_tensor = tf.gradients(label_logits,images_pl)[0]
@@ -121,8 +121,7 @@ def main(args):
     epoch = args.epoch
     loss = -lambda_up*to_inc_region+lambda_down*to_dec_region
     img = np.array(old_img)
-    old_loss, old_logits = sess.run([to_dec_region, to_inc_region],
-                                    feed_dict={images_pl: np.expand_dims(old_img, 0), y_label: 285})
+    old_loss = sess.run(loss,feed_dict={images_pl: np.expand_dims(old_img, 0), y_label: 285})
     num_list = '_'.join([model_name,str(to_dec_center[0]),str(to_dec_center[1]),str(to_dec_radius[0]),str(to_dec_radius[1]),
                          str(N),str(eta),str(epoch),str(lambda_down),str(lambda_up)])
     print(num_list)
@@ -140,7 +139,8 @@ def main(args):
         new_img = np.clip(img-eta*grad_sum,old_img-epsilon,old_img+epsilon)
         new_loss, new_logits = sess.run([loss, logits],
                                         feed_dict={images_pl: np.expand_dims(new_img, 0), y_label: 285})
-        print("epoch:{} new:{}, {}, old:{}, {}".format(epoch, new_loss, np.argmax(new_logits),old_loss, np.argmax(old_logits)))
+        print("epoch:{} new:{}, {}, old:{}, {}".format(epoch, new_loss, np.argmax(new_logits),old_loss, np.argmax(_prob)))
+        sys.stdout.flush()
         img = np.array(new_img)
         epoch -= 1
 
