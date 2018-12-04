@@ -16,7 +16,7 @@ def parse_arguments(argv):
     parser.add_argument("--epoch", type=int, help="specify the training epochs", default=100)
     parser.add_argument("--eps", type=float, help="specify the degree of disturb", default=8/255)
     parser.add_argument("--lr", type=float, help="specify the learning rate", default=0.0001)
-    parser.add_argument("--lambda_up", type=float, help="specify the lambda for increasing gradient in the given region", default=10)
+    parser.add_argument("--lambda_up"   , type=float, help="specify the lambda for increasing gradient in the given region", default=10)
     parser.add_argument("--lambda_down", type=float, help="specify the lambda for lowering gradient in the given region", default=10)
     parser.add_argument("--lambda_label_loss", type=float, help="specify the lambda for the crossentropy loss of classifying wrong label", default=10)
     parser.add_argument("--label_num", type=int, help="specify the number of final outputs in pretrained model", default=1000)
@@ -123,7 +123,7 @@ def main(args):
     img = np.array(old_img)
     old_loss, old_logits = sess.run([to_dec_region, to_inc_region],
                                     feed_dict={images_pl: np.expand_dims(old_img, 0), y_label: 285})
-    num_list = '_'.join([str(to_dec_center[0]),str(to_dec_center[1]),str(to_dec_radius[0]),str(to_dec_radius[1]),
+    num_list = '_'.join([model_name,str(to_dec_center[0]),str(to_dec_center[1]),str(to_dec_radius[0]),str(to_dec_radius[1]),
                          str(N),str(eta),str(epoch),str(lambda_down),str(lambda_up)])
     print(num_list)
     while epoch > 0:
