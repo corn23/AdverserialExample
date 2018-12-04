@@ -91,7 +91,7 @@ def calculate_img_region_importance(map3D,center,radius=(10,10)):
     assert channel == 3
     assert batch_num == 1
     greymap = tf.squeeze(map3D,0)
-    greymap = tf.reduce_sum(tf.abs(greymap),2)
+    greymap = tf.reduce_mean(tf.abs(greymap),2)
     up_bound = max(center[0]-radius[0],0)
     lower_bound = min(center[0]+radius[0],length)
     left_bound = max(center[1]-radius[1],0)
