@@ -117,7 +117,8 @@ def main(args):
     epsilon = args.eps
     epoch = args.epoch
     eta = args.lr
-    loss = -lambda_up*to_inc_region+lambda_down*to_dec_region
+    #loss = -lambda_up*to_inc_region+lambda_down*to_dec_region
+    loss = to_dec_region/to_inc_region
     old_loss = sess.run(loss,feed_dict={images_pl: np.expand_dims(img, 0), y_label: true_class})
     #eta = 0.01/abs(old_loss)
     num_list = '_'.join([model_name,str(to_dec_center[0]),str(to_dec_center[1]),str(to_dec_radius[0]),str(to_dec_radius[1]),
@@ -134,7 +135,7 @@ def main(args):
             f_value_list.append(f_value)
             grad_sum += f_value*idelta.reshape(img_size,img_size,3)
         grad_sum = grad_sum/(N*sigma)
-        new_img = np.clip(img-eta*grad_sum,old_img-epsilon,old_img+epsilon)
+        new_img = np.clip(np.clip(img-eta*grad_sum,old_img-epsilon,old_img+epsilon),0,1)
         new_loss, new_logits = sess.run([loss, logits],
                                         feed_dict={images_pl: np.expand_dims(new_img, 0), y_label: true_class})
         print("epoch:{} new:{}, {}, old:{}, {}".format(epoch, new_loss, np.argmax(new_logits),old_loss, np.argmax(_prob)))
