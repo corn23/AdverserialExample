@@ -25,7 +25,7 @@ def parse_arguments(argv):
     parser.add_argument("--write_summary", help="write summary or not", action="store_true", default=False)
     parser.add_argument("--image_interval", type=int, help="write image into summary every *image_interval*",default=5)
     parser.add_argument("-N", type=int,help="specify the number vectors in NES", default=30)
-    parser.add_argument("-imp",help="specify a path for intermediate image",default='')
+    parser.add_argument("--imp",help="specify a path for intermediate image",default='')
     pargs = parser.parse_args(argv)
     return pargs
 
