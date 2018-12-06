@@ -67,14 +67,18 @@ def main(args):
 
     smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(img, feed_dict={y_label:true_class}) # much clear, 2204/2192
     smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(smoothgrad_mask_3d)
+    #
+    # new_img = np.load('new_imgvgg16_80_120_30_40_30_0.0001_200_1.0_0.0.npy')
+    # new_grad_map = sess.run(grad_map_tensor,feed_dict={images_pl:np.expand_dims(new_img,0),y_label:true_class})
+    # new_vanilla_mask_3d = gradient_saliency.GetMask(new_img, feed_dict={y_label:true_class}) # better
+    # new_vanilla_mask_grayscale = saliency.VisualizeImageGrayscale(new_vanilla_mask_3d)
+    # new_smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(new_img, feed_dict={y_label:true_class}) # much clear, 2204/2192
+    # new_smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(new_smoothgrad_mask_3d)
 
-    # smoothgrad_mask_3d_cat = gradient_saliency.GetSmoothedMask(img, feed_dict={y_label:281}) # much clear, 2204/2192
-    # smoothgrad_mask_grayscale_cat = saliency.VisualizeImageGrayscale(smoothgrad_mask_3d_cat)
-
-    to_dec_center = (80,120)
-    to_dec_radius = (30,40)
-    to_inc_center = (140,220)
-    to_inc_radius = (30,40)
+    to_dec_center = (60,70)
+    to_dec_radius = (35,45)
+    to_inc_center = (120,170)
+    to_inc_radius = (40,30)
     _map = grad_map
     print(calculate_region_importance(_map, to_dec_center, to_dec_radius))
     print(calculate_region_importance(_map, to_inc_center, to_inc_radius))
@@ -181,3 +185,4 @@ def main(args):
 if __name__ == "__main__":
     args = parse_arguments(sys.argv[1:])
     main(args)
+
