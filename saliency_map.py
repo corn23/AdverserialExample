@@ -25,6 +25,7 @@ def parse_arguments(argv):
     parser.add_argument("--write_summary", help="write summary or not", action="store_true", default=False)
     parser.add_argument("--image_interval", type=int, help="write image into summary every *image_interval*",default=5)
     parser.add_argument("-N", type=int,help="specify the number vectors in NES", default=30)
+    parser.add_argument("-imp",help="specify a path for intermediate image",default='')
     pargs = parser.parse_args(argv)
     return pargs
 
@@ -48,8 +49,11 @@ def main(args):
     y_label = tf.placeholder(dtype=tf.int32,shape=())
     label_logits = logits[0,y_label]
 
-    img = PIL.Image.open(img_path)
-    img = preprocess_img(img, img_size)
+    if len(args.imp)>0:
+        img = np.load(args.imp)
+    else:
+        img = PIL.Image.open(img_path)
+        img = preprocess_img(img, img_size)
     old_img = np.array(img)
     batch_img = np.expand_dims(img, 0)
     imagenet_label = load_imagenet_label(img_label_path)
@@ -68,7 +72,7 @@ def main(args):
     smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(img, feed_dict={y_label:true_class}) # much clear, 2204/2192
     smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(smoothgrad_mask_3d)
     #
-    # new_img = np.load('new_imgvgg16_80_120_30_40_30_0.0001_200_1.0_0.0.npy')
+    # new_img = np.load('new_imgvgg16_60_70_35_45_30_0.0001_200_0.0_0.0.npy')
     # new_grad_map = sess.run(grad_map_tensor,feed_dict={images_pl:np.expand_dims(new_img,0),y_label:true_class})
     # new_vanilla_mask_3d = gradient_saliency.GetMask(new_img, feed_dict={y_label:true_class}) # better
     # new_vanilla_mask_grayscale = saliency.VisualizeImageGrayscale(new_vanilla_mask_3d)
