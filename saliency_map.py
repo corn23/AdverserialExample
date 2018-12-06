@@ -150,7 +150,9 @@ def main(args):
         sys.stdout.flush()
         img = np.array(new_img)
         epoch -= 1
-
+        if epoch % 200 ==0:
+            temp_name = num_list+'_'+str(epoch)
+            np.save(temp_name,new_img)
     np.save('new_img'+num_list,new_img)
 
     # show the neighbour change
