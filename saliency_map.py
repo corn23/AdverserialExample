@@ -51,9 +51,11 @@ def main(args):
 
     if len(args.imp)>0:
         img = np.load(args.imp)
+        init_epoch = int(args.imp.split('.')[0].split('_')[-1])
     else:
         img = PIL.Image.open(img_path)
         img = preprocess_img(img, img_size)
+        init_epoch = 0
     old_img = np.array(img)
     batch_img = np.expand_dims(img, 0)
     imagenet_label = load_imagenet_label(img_label_path)
@@ -72,7 +74,7 @@ def main(args):
     smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(img, feed_dict={y_label:true_class}) # much clear, 2204/2192
     smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(smoothgrad_mask_3d)
     #
-    # new_img = np.load('new_imgvgg16_60_70_35_45_30_0.0001_200_0.0_0.0.npy')
+    # new_img = np.load('new_imgvgg16_60_70_35_45_30_0.0001_1000_0.0_0.0.npy')
     # new_grad_map = sess.run(grad_map_tensor,feed_dict={images_pl:np.expand_dims(new_img,0),y_label:true_class})
     # new_vanilla_mask_3d = gradient_saliency.GetMask(new_img, feed_dict={y_label:true_class}) # better
     # new_vanilla_mask_grayscale = saliency.VisualizeImageGrayscale(new_vanilla_mask_3d)
@@ -132,7 +134,7 @@ def main(args):
     num_list = '_'.join([model_name,str(to_dec_center[0]),str(to_dec_center[1]),str(to_dec_radius[0]),str(to_dec_radius[1]),
                          str(N),str(eta),str(epoch),str(lambda_down),str(lambda_up)])
     print(num_list)
-    while epoch > 0:
+    for i in range(epoch):
         delta = np.random.randn(int(N/2),img_size*img_size*3)
         delta = np.concatenate((delta,-delta),axis=0)
         grad_sum = 0
@@ -149,9 +151,8 @@ def main(args):
         print("epoch:{} new:{}, {}, old:{}, {}".format(epoch, new_loss, np.argmax(new_logits),old_loss, np.argmax(_prob)))
         sys.stdout.flush()
         img = np.array(new_img)
-        epoch -= 1
-        if epoch % 200 ==0:
-            temp_name = num_list+'_'+str(epoch)
+        if i % args.image_interval ==0:
+            temp_name = num_list+'_'+str(epoch+init_epoch)
             np.save(temp_name,new_img)
     np.save('new_img'+num_list,new_img)
 
