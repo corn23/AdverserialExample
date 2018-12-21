@@ -26,6 +26,8 @@ def parse_arguments(argv):
     parser.add_argument("--image_interval", type=int, help="write image into summary every *image_interval*",default=5)
     parser.add_argument("-N", type=int,help="specify the number vectors in NES", default=30)
     parser.add_argument("--imp",help="specify a path for intermediate image",default='')
+    parser.add_argument("--sigma", type=float,help="specify sigma vector in NES", default=0.001)
+
     pargs = parser.parse_args(argv)
     return pargs
 
@@ -61,7 +63,7 @@ def main(args):
     imagenet_label = load_imagenet_label(img_label_path)
     prob = tf.nn.softmax(logits)
     _prob = sess.run(prob, feed_dict={images_pl:batch_img})[0]
-    #classify(img,_prob,imagenet_label,1,1)
+    classify(img,_prob,imagenet_label,1,1)
 
     # attribution method 1, logits[label])/d(img_pl)
     grad_map_tensor = tf.gradients(label_logits,images_pl)[0]
@@ -74,18 +76,18 @@ def main(args):
     smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(img, feed_dict={y_label:true_class}) # much clear, 2204/2192
     smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(smoothgrad_mask_3d)
     #
-    # new_img = np.load('new_imgvgg16_60_70_35_45_30_0.0001_1000_0.0_0.0.npy')
-    # new_grad_map = sess.run(grad_map_tensor,feed_dict={images_pl:np.expand_dims(new_img,0),y_label:true_class})
-    # new_vanilla_mask_3d = gradient_saliency.GetMask(new_img, feed_dict={y_label:true_class}) # better
-    # new_vanilla_mask_grayscale = saliency.VisualizeImageGrayscale(new_vanilla_mask_3d)
-    # new_smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(new_img, feed_dict={y_label:true_class}) # much clear, 2204/2192
-    # new_smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(new_smoothgrad_mask_3d)
+    new_img = np.load('vgg16_60_70_35_45_30_0.0001_800_0.0_0.0_9000.npy')
+    new_grad_map = sess.run(grad_map_tensor,feed_dict={images_pl:np.expand_dims(new_img,0),y_label:true_class})
+    new_vanilla_mask_3d = gradient_saliency.GetMask(new_img, feed_dict={y_label:true_class}) # better
+    new_vanilla_mask_grayscale = saliency.VisualizeImageGrayscale(new_vanilla_mask_3d)
+    new_smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(new_img, feed_dict={y_label:true_class}) # much clear, 2204/2192
+    new_smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(new_smoothgrad_mask_3d)
 
     to_dec_center = (60,70)
     to_dec_radius = (35,45)
     to_inc_center = (120,170)
     to_inc_radius = (40,30)
-    _map = grad_map
+    _map = new_vanilla_mask_grayscale
     print(calculate_region_importance(_map, to_dec_center, to_dec_radius))
     print(calculate_region_importance(_map, to_inc_center, to_inc_radius))
 
@@ -123,7 +125,7 @@ def main(args):
 
     # try NES (Natural evolutionary strategies)
     N = args.N
-    sigma = 0.001
+    sigma = args.sigma
     epsilon = args.eps
     epoch = args.epoch
     eta = args.lr
@@ -132,7 +134,7 @@ def main(args):
     old_loss = sess.run(loss,feed_dict={images_pl: np.expand_dims(img, 0), y_label: true_class})
     #eta = 0.01/abs(old_loss)
     num_list = '_'.join([model_name,str(to_dec_center[0]),str(to_dec_center[1]),str(to_dec_radius[0]),str(to_dec_radius[1]),
-                         str(N),str(eta),str(epoch),str(lambda_down),str(lambda_up)])
+                         str(N),str(eta),str(epoch),str(lambda_down),str(lambda_up),str(sigma)])
     print(num_list)
     for i in range(epoch):
         delta = np.random.randn(int(N/2),img_size*img_size*3)
@@ -193,3 +195,66 @@ if __name__ == "__main__":
     args = parse_arguments(sys.argv[1:])
     main(args)
 
+# new_img = np.array(img)
+# new_img[25:95,105:195,:] += sub_img
+# new_img[25:95,25:115] =
+# new_img = np.clip(new_img,0,1)
+#
+# # attack the smooth gradient map
+# region_grad_value_list = []
+# ration_list = []
+# for ilabel in range(1000):
+#     new_smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(img, feed_dict={y_label:ilabel}) # much clear, 2204/2192
+#     new_smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(new_smoothgrad_mask_3d)
+#     _map = new_smoothgrad_mask_grayscale
+#     dec = calculate_region_importance(_map, to_dec_center, to_dec_radius)
+#     inc = calculate_region_importance(_map, to_inc_center, to_inc_radius)
+#     print("label:{},dec:{},inc:{},ration:{}".format(ilabel,dec,inc,dec/inc))
+#     region_grad_value_list.append((dec,inc))
+#     ration_list.append(dec/inc)
+
+
+# def get_cam_map_overlay(cam_map,img_size):
+#     cam_map_weight = np.mean(np.mean(cam_map, axis=0), axis=0)
+#     cam_saliency_map = np.clip(np.mean(np.multiply(cam_map_weight, cam_map), axis=2), a_min=0, a_max=1)
+#     cam_map_resized = cv.resize(cam_saliency_map, (224, 224))
+#     cam_map_resized = cam_map_resized / cam_map_resized.max()
+#
+#     cam_map_overlay = np.zeros((img_size, img_size, 4))
+#     cam_map_overlay[:, :, 0] = cam_map_resized
+#     cam_map_overlay[:, :, 3] = cam_map_resized > 0.4 * cam_map_resized.max()
+#     return cam_map_overlay
+
+###############################
+# grad-cam
+# from skimage.transform import resize
+# import cv2
+# tensor_names = [t.name for op in tf.get_default_graph().get_operations() for t in op.values()]
+# maxpool = tf.get_default_graph().get_tensor_by_name('vgg_16/pool5/MaxPool:0')
+# final_conv = tf.get_default_graph().get_tensor_by_name('vgg_16/conv5/conv5_3/BiasAdd:0')
+# cam_map_tensor = tf.gradients(label_logits,final_conv)
+#
+# cam_map = sess.run(cam_map_tensor,feed_dict= {images_pl:np.expand_dims(new_img,0),y_label:true_class})[0][0]
+#
+# # calculate the weigths
+# new_cam_map_overlay = get_cam_map_overlay(cam_map,img_size=img_size)
+#
+# plt.subplot(122)
+# axe1 = plt.subplot(121)
+# axe1.imshow(img)
+# axe1.imshow(cam_map_overlay)
+#
+# axe2 = plt.subplot(122)
+# axe2.imshow(new_img)
+# axe2.imshow(new_cam_map_overlay)
+#
+# plt.subplot(122)
+# plt.subplot(121)
+# heatmap = cv2.applyColorMap(np.uint8(cam_map_overlay[:,:,0]*255),cv2.COLORMAP_JET)
+# plt.imshow(heatmap)
+# plt.subplot(122)
+# new_heatmap = cv2.applyColorMap(np.uint8(new_cam_map_overlay[:,:,0]*255),cv2.COLORMAP_JET)
+# plt.imshow(new_heatmap)
+
+################################
+# meaningful perturbation
