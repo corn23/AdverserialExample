@@ -53,7 +53,7 @@ def main(args):
 
     if len(args.imp)>0:
         img = np.load(args.imp)
-        init_epoch = int(args.imp.split('.')[0].split('_')[-1])
+        init_epoch = int(args.imp[:-4].split('_')[-1])
     else:
         img = PIL.Image.open(img_path)
         img = preprocess_img(img, img_size)
@@ -150,13 +150,13 @@ def main(args):
         new_img = np.clip(np.clip(img-eta*grad_sum,old_img-epsilon,old_img+epsilon),0,1)
         new_loss, new_logits = sess.run([loss, logits],
                                         feed_dict={images_pl: np.expand_dims(new_img, 0), y_label: true_class})
-        print("epoch:{} new:{}, {}, old:{}, {}".format(epoch, new_loss, np.argmax(new_logits),old_loss, np.argmax(_prob)))
+        print("epoch:{} new:{}, {}, old:{}, {}".format(i, new_loss, np.argmax(new_logits), old_loss, np.argmax(_prob)))
         sys.stdout.flush()
         img = np.array(new_img)
         if i % args.image_interval ==0:
-            temp_name = num_list+'_'+str(epoch+init_epoch)
+            temp_name = num_list+'_'+str(i+init_epoch)
             np.save(temp_name,new_img)
-    np.save('new_img'+num_list,new_img)
+    np.save(num_list+'_'+str(epoch+init_epoch),new_img)
 
     # show the neighbour change
     # yita = np.linspace(-0.2,0.2,40)
