@@ -76,18 +76,18 @@ def main(args):
     smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(img, feed_dict={y_label:true_class}) # much clear, 2204/2192
     smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(smoothgrad_mask_3d)
     #
-    new_img = np.load('vgg16_60_70_35_45_30_0.0001_800_0.0_0.0_9000.npy')
-    new_grad_map = sess.run(grad_map_tensor,feed_dict={images_pl:np.expand_dims(new_img,0),y_label:true_class})
-    new_vanilla_mask_3d = gradient_saliency.GetMask(new_img, feed_dict={y_label:true_class}) # better
-    new_vanilla_mask_grayscale = saliency.VisualizeImageGrayscale(new_vanilla_mask_3d)
-    new_smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(new_img, feed_dict={y_label:true_class}) # much clear, 2204/2192
-    new_smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(new_smoothgrad_mask_3d)
+    # new_img = np.load('vgg16_60_70_35_45_30_0.0001_800_0.0_0.0_9000.npy')
+    # new_grad_map = sess.run(grad_map_tensor,feed_dict={images_pl:np.expand_dims(new_img,0),y_label:true_class})
+    # new_vanilla_mask_3d = gradient_saliency.GetMask(new_img, feed_dict={y_label:true_class}) # better
+    # new_vanilla_mask_grayscale = saliency.VisualizeImageGrayscale(new_vanilla_mask_3d)
+    # new_smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(new_img, feed_dict={y_label:true_class}) # much clear, 2204/2192
+    # new_smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(new_smoothgrad_mask_3d)
 
     to_dec_center = (60,70)
     to_dec_radius = (35,45)
     to_inc_center = (120,170)
     to_inc_radius = (40,30)
-    _map = new_vanilla_mask_grayscale
+    _map = vanilla_mask_grayscale
     print(calculate_region_importance(_map, to_dec_center, to_dec_radius))
     print(calculate_region_importance(_map, to_inc_center, to_inc_radius))
 
@@ -133,8 +133,8 @@ def main(args):
     loss = to_dec_region/to_inc_region
     old_loss = sess.run(loss,feed_dict={images_pl: np.expand_dims(img, 0), y_label: true_class})
     #eta = 0.01/abs(old_loss)
-    num_list = '_'.join([model_name,str(to_dec_center[0]),str(to_dec_center[1]),str(to_dec_radius[0]),str(to_dec_radius[1]),
-                         str(N),str(eta),str(epoch),str(lambda_down),str(lambda_up),str(sigma)])
+    num_list = '_'.join([model_name, str(N), str(eta), str(epoch), str(sigma), str(epsilon)])
+    loss_list=[]
     print(num_list)
     for i in range(epoch):
         delta = np.random.randn(int(N/2),img_size*img_size*3)
@@ -150,13 +150,18 @@ def main(args):
         new_img = np.clip(np.clip(img-eta*grad_sum,old_img-epsilon,old_img+epsilon),0,1)
         new_loss, new_logits = sess.run([loss, logits],
                                         feed_dict={images_pl: np.expand_dims(new_img, 0), y_label: true_class})
+        loss_list.append(new_loss)
         print("epoch:{} new:{}, {}, old:{}, {}".format(i, new_loss, np.argmax(new_logits), old_loss, np.argmax(_prob)))
         sys.stdout.flush()
         img = np.array(new_img)
         if i % args.image_interval ==0:
             temp_name = num_list+'_'+str(i+init_epoch)
             np.save(temp_name,new_img)
+        if i % args.image_interval == 0:
+            np.save('loss'+num_list+'_'+str(epoch+i),loss_list)
     np.save(num_list+'_'+str(epoch+init_epoch),new_img)
+    np.save('loss'+num_list+'_'+str(epoch+init_epoch),loss_list)
+
 
     # show the neighbour change
     # yita = np.linspace(-0.2,0.2,40)
