@@ -54,10 +54,12 @@ def main(args):
     if len(args.imp)>0:
         img = np.load(args.imp)
         init_epoch = int(args.imp[:-4].split('_')[-1])
+        loss_list = np.load('loss_'+args.imp)
     else:
         img = PIL.Image.open(img_path)
         img = preprocess_img(img, img_size)
         init_epoch = 0
+        loss_list = []
     old_img = np.array(img)
     batch_img = np.expand_dims(img, 0)
     imagenet_label = load_imagenet_label(img_label_path)
@@ -134,7 +136,6 @@ def main(args):
     old_loss = sess.run(loss,feed_dict={images_pl: np.expand_dims(img, 0), y_label: true_class})
     #eta = 0.01/abs(old_loss)
     num_list = '_'.join([model_name, str(N), str(eta), str(epoch), str(sigma), str(epsilon)])
-    loss_list=[]
     print(num_list)
     for i in range(epoch):
         delta = np.random.randn(int(N/2),img_size*img_size*3)
@@ -158,9 +159,9 @@ def main(args):
             temp_name = num_list+'_'+str(i+init_epoch)
             np.save(temp_name,new_img)
         if i % args.image_interval == 0:
-            np.save('loss'+num_list+'_'+str(epoch+i),loss_list)
+            np.save('loss_'+temp_name,loss_list)
     np.save(num_list+'_'+str(epoch+init_epoch),new_img)
-    np.save('loss'+num_list+'_'+str(epoch+init_epoch),loss_list)
+    np.save('loss_'+num_list+'_'+str(epoch+init_epoch),loss_list)
 
 
     # show the neighbour change
