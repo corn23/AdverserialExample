@@ -54,7 +54,7 @@ def main(args):
     if len(args.imp)>0:
         img = np.load(args.imp)
         init_epoch = int(args.imp[:-4].split('_')[-1])
-        loss_list = np.load('loss_'+args.imp)
+        loss_list = list(np.load('loss_'+args.imp))
     else:
         img = PIL.Image.open(img_path)
         img = preprocess_img(img, img_size)
