@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import saliency
 import argparse
 import sys
-from utils import plot
+from utils import plot,calculate_deeplift_loss
+from deepexplain.tensorflow import DeepExplain
 
 def parse_arguments(argv):
     parser = argparse.ArgumentParser()
@@ -123,8 +124,9 @@ def main(args):
     #         axj = axes.flatten()[i * n_cols + j + 1]
     #         plot(attributions[a][i], xi=xi, axis=axj, dilation=.5, percentile=99, alpha=.2).set_title(a)
     ######
-    # with DeepExplain(session=sess) as de:
-    #     dlift = de.explain('deeplift', label_logits, images_pl, batch_img)
+    label_logits = logits[0,208]
+    with DeepExplain(session=sess) as de:
+        dlift = de.explain('deeplift', label_logits, images_pl, batch_img)
 
     grad_map_tensor = tf.gradients(label_logits,images_pl)[0]
     grad_map = sess.run(grad_map_tensor,feed_dict={images_pl:np.expand_dims(img,0),y_label:true_class})
@@ -158,42 +160,15 @@ def main(args):
     to_dec_region = calculate_img_region_importance(grad_map_tensor, to_dec_center, to_dec_radius)
     to_inc_region = calculate_img_region_importance(grad_map_tensor, to_inc_center, to_inc_radius)
 
-    # finite difference
-    # delta = 0.1
-    # update_grad = np.zeros((img_size,img_size,3))
-    # epoch = 3
-    # k = 0
-    # while epoch > 0:
-    #     for i in range(135,145):
-    #         for j in range(135,145):
-    #             print(i,j,k)
-    #             img_plus_value = min(img[i,j,k]+delta,1)
-    #             img_minus_value = max(img[i,j,k]-delta,0)
-    #             img_plus = np.array(img)
-    #             img_plus[i,j,k] = img_plus_value
-    #             img_minus = np.array(img)
-    #             img_minus[i,j,k] = img_minus_value
-    #             loss_plus = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img_plus,0),y_label:285})
-    #             loss_minus = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img_minus,0),y_label:285})
-    #             value = (loss_plus-loss_minus)/(2*(img_plus_value-img_minus_value))
-    #             print(value)
-    #             update_grad[i,j,k] = value
-    #     new_img = np.clip(img-0.1*update_grad,0,1)
-    #     new_loss,new_logits = sess.run([to_dec_region,logits],feed_dict={images_pl:np.expand_dims(new_img,0),y_label:285})
-    #     old_loss,old_logits = sess.run([to_dec_region,logits],feed_dict={images_pl:np.expand_dims(old_img,0),y_label:285})
-    #     print("new:{} ,{}".format(new_loss,np.argmax(new_logits)))
-    #     print("old:{}, {}".format(old_loss,np.argmax(old_logits)))
-    #     img=new_img
-    #     epoch -= 1
-
     # try NES (Natural evolutionary strategies)
     N = args.N
     sigma = args.sigma
-    epsilon = round(args.eps,1)
+    epsilon = round(args.eps,2)
     epoch = args.epoch
     eta = args.lr
-    loss = to_dec_region/to_inc_region
-    old_loss = sess.run(loss,feed_dict={images_pl: np.expand_dims(img, 0), y_label: true_class})
+    #loss = to_dec_region/to_inc_region
+    #old_loss = sess.run(loss,feed_dict={images_pl: np.expand_dims(img, 0), y_label: true_class})
+    old_loss = calculate_deeplift_loss(dlift,to_dec_center, to_dec_radius, to_inc_center, to_inc_radius)
     num_list = '_'.join(['big',model_name, str(N), str(eta), str(epoch), str(sigma), str(epsilon)])
     print(num_list)
     for i in range(epoch):
@@ -203,15 +178,22 @@ def main(args):
         f_value_list = []
         for idelta in delta:
             img_plus = np.clip(img+sigma*idelta.reshape(img_size,img_size,3),0,1)
-            f_value = sess.run(loss,feed_dict={images_pl:np.expand_dims(img_plus,0),y_label:true_class})
+            #f_value = sess.run(loss,feed_dict={images_pl:np.expand_dims(img_plus,0),y_label:true_class})
+            with DeepExplain(session=sess) as de:
+                dlift = de.explain('deeplift', label_logits, images_pl, np.expand_dims(img_plus,0))
+            f_value = calculate_deeplift_loss(dlift,to_dec_center, to_dec_radius, to_inc_center, to_inc_radius)
             f_value_list.append(f_value)
             grad_sum += f_value*idelta.reshape(img_size,img_size,3)
         grad_sum = grad_sum/(N*sigma)
         new_img = np.clip(np.clip(img-eta*grad_sum,old_img-epsilon,old_img+epsilon),0,1)
-        new_loss, new_logits = sess.run([loss, logits],
-                                        feed_dict={images_pl: np.expand_dims(new_img, 0), y_label: true_class})
+        #new_loss, new_logits = sess.run([loss, logits],
+        #                                feed_dict={images_pl: np.expand_dims(new_img, 0), y_label: true_class})
+        with DeepExplain(session=sess) as de:
+            dlift = de.explain('deeplift', label_logits, images_pl, np.expand_dims(new_img, 0))
+        new_loss = calculate_deeplift_loss(dlift, to_dec_center, to_dec_radius, to_inc_center, to_inc_radius)
+
         loss_list.append(new_loss)
-        print("epoch:{} new:{}, {}, old:{}, {}".format(i, new_loss, np.argmax(new_logits), old_loss, np.argmax(_prob)))
+        print("epoch:{} new:{}, old:{}, {}".format(i, new_loss,old_loss, np.argmax(_prob)))
         sys.stdout.flush()
         img = np.array(new_img)
         if i % args.image_interval ==0:

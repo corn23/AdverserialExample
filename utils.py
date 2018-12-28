@@ -309,3 +309,12 @@ def plot(data, xi=None, cmap='RdBu_r', axis=plt, percentile=100, dilation=3.0, a
         axis.imshow(overlay, extent=extent, interpolation='none', cmap=cmap_xi, alpha=alpha)
     axis.axis('off')
     return axis
+
+
+def calculate_deeplift_loss(dlift, to_dec_center, to_dec_radius, to_inc_center, to_inc_radius):
+    to_dec_region = calculate_region_importance(dlift, to_dec_center, to_dec_radius)
+    to_inc_region = calculate_region_importance(dlift, to_inc_center, to_inc_radius)
+    loss = to_dec_region/to_inc_region
+
+    return loss
+
