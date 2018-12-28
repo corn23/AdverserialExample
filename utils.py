@@ -9,6 +9,8 @@ import tensorflow as tf
 import tensorflow.contrib.slim.nets as nets
 import tensorflow.contrib.slim as slim
 import saliency
+from deepexplain.tensorflow import DeepExplain
+from skimage import feature, transform
 
 def maybe_download_and_extract(dest_directory,data_url):
     if not os.path.exists(dest_directory):
@@ -89,7 +91,6 @@ def calculate_region_importance(greymap,center,radius=(10,10)):
 def calculate_img_region_importance(map3D,center,radius=(10,10)):
     batch_num, length, width, channel = map3D.shape
     assert channel == 3
-    assert batch_num == 1
     greymap = tf.squeeze(map3D,0)
     greymap = tf.reduce_mean(tf.abs(greymap),2)
     up_bound = max(center[0]-radius[0],0)
@@ -100,11 +101,11 @@ def calculate_img_region_importance(map3D,center,radius=(10,10)):
     return importance
 
 
-def load_pretrain_model(model_name='vgg16'):
+def load_pretrain_model(model_name='vgg16',is_explain=False):
     sess = tf.InteractiveSession()
     if model_name == 'inception_v3':
         img_size = 299
-        images_v = tf.placeholder(dtype=tf.float32,shape=(1, img_size, img_size, 3))
+        images_v = tf.placeholder(dtype=tf.float32,shape=(None, img_size, img_size, 3))
         preprocessed = tf.multiply(tf.subtract(images_v, 0.5), 2.0)
         arg_scope = nets.inception.inception_v3_arg_scope(weight_decay=0.0)
         with slim.arg_scope(arg_scope):
@@ -121,28 +122,50 @@ def load_pretrain_model(model_name='vgg16'):
         saver.restore(sess, os.path.join(dest_directory, 'inception_v3.ckpt'))
         graph = tf.get_default_graph()
     if model_name == 'vgg16':
-        img_size = 224
-        images_v = tf.placeholder(dtype=tf.float32,shape=(1, img_size, img_size, 3))
-        preprocessed = tf.multiply(tf.subtract(images_v, 0.5), 2.0)
-        arg_scope = nets.vgg.vgg_arg_scope(weight_decay=0.0)
-        with slim.arg_scope(arg_scope):
-            logits, _ = nets.vgg.vgg_16(
-                preprocessed, num_classes=1000, is_training=False)
+        if is_explain:
+            with DeepExplain(session=sess) as de:
+                img_size = 224
+                images_v = tf.placeholder(dtype=tf.float32,shape=(None, img_size, img_size, 3))
+                preprocessed = tf.multiply(tf.subtract(images_v, 0.5), 2.0)
+                arg_scope = nets.vgg.vgg_arg_scope(weight_decay=0.0)
+                with slim.arg_scope(arg_scope):
+                    logits, _ = nets.vgg.vgg_16(
+                        preprocessed, num_classes=1000, is_training=False)
 
-        # restore model
-        data_url = 'http://download.tensorflow.org/models/vgg_16_2016_08_28.tar.gz'
-        dest_directory = './imagenet'
-        maybe_download_and_extract(dest_directory, data_url)
-        restore_vars = [
-            var for var in tf.global_variables()
-            if var.name.startswith('vgg_16/')
-        ]
-        saver = tf.train.Saver(restore_vars)
-        saver.restore(sess, os.path.join(dest_directory, 'vgg_16.ckpt'))
-        graph = tf.get_default_graph()
+                # restore model
+                data_url = 'http://download.tensorflow.org/models/vgg_16_2016_08_28.tar.gz'
+                dest_directory = './imagenet'
+                maybe_download_and_extract(dest_directory, data_url)
+                restore_vars = [
+                    var for var in tf.global_variables()
+                    if var.name.startswith('vgg_16/')
+                ]
+                saver = tf.train.Saver(restore_vars)
+                saver.restore(sess, os.path.join(dest_directory, 'vgg_16.ckpt'))
+                graph = tf.get_default_graph()
+        else:
+            img_size = 224
+            images_v = tf.placeholder(dtype=tf.float32, shape=(None, img_size, img_size, 3))
+            preprocessed = tf.multiply(tf.subtract(images_v, 0.5), 2.0)
+            arg_scope = nets.vgg.vgg_arg_scope(weight_decay=0.0)
+            with slim.arg_scope(arg_scope):
+                logits, _ = nets.vgg.vgg_16(
+                    preprocessed, num_classes=1000, is_training=False)
+
+            # restore model
+            data_url = 'http://download.tensorflow.org/models/vgg_16_2016_08_28.tar.gz'
+            dest_directory = './imagenet'
+            maybe_download_and_extract(dest_directory, data_url)
+            restore_vars = [
+                var for var in tf.global_variables()
+                if var.name.startswith('vgg_16/')
+            ]
+            saver = tf.train.Saver(restore_vars)
+            saver.restore(sess, os.path.join(dest_directory, 'vgg_16.ckpt'))
+            graph = tf.get_default_graph()
     if model_name == "resnet_v1_50":
         img_size = 224
-        images_v = tf.Variable(tf.zeros((1, img_size, img_size, 3)))
+        images_v = tf.Variable(tf.zeros((None, img_size, img_size, 3)))
         preprocessed = tf.multiply(tf.subtract(images_v, 0.5), 2.0)
         arg_scope = nets.resnet_v1.resnet_arg_scope(weight_decay=0.0)
         with slim.arg_scope(arg_scope):
@@ -163,7 +186,7 @@ def load_pretrain_model(model_name='vgg16'):
 
     if model_name == "resnet_v1_152":
         img_size = 224
-        images_v = tf.Variable(tf.zeros((1, img_size, img_size, 3)))
+        images_v = tf.Variable(tf.zeros((None, img_size, img_size, 3)))
         preprocessed = tf.multiply(tf.subtract(images_v, 0.5), 2.0)
         arg_scope = nets.resnet_v1.resnet_arg_scope(weight_decay=0.0)
         with slim.arg_scope(arg_scope):
@@ -241,4 +264,48 @@ def mask_img_region(img,center,radius):
     return new_img
 
 
+def fgsm(sess, img, logits, adv_label, images_pl, epsilon=8/255, eta=0.1,epoch=10):
+    label = tf.one_hot(adv_label,1000)
+    old_img = np.array(img)
+    if img.ndim < 4:
+        img = np.expand_dims(img,0)
+    loss = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits,labels=label)
+    grad = tf.gradients(loss,images_pl)[0]
+    for i in range(epoch):
+        _grad,_loss,_logits = sess.run([grad,loss,logits],feed_dict={images_pl:img})
+        img  = np.clip(np.clip(img-eta*_grad,old_img-epsilon,old_img+epsilon),0,1)
+        print("epoch:{}, loss:{}, predict:{}".format(i,_loss[0],np.argmax(_logits[0])))
+    return img
 
+
+def plot(data, xi=None, cmap='RdBu_r', axis=plt, percentile=100, dilation=3.0, alpha=0.8):
+    dx, dy = 0.05, 0.05
+    xx = np.arange(0.0, data.shape[1], dx)
+    yy = np.arange(0.0, data.shape[0], dy)
+    xmin, xmax, ymin, ymax = np.amin(xx), np.amax(xx), np.amin(yy), np.amax(yy)
+    extent = xmin, xmax, ymin,   ymax
+    cmap_xi = plt.get_cmap('Greys_r')
+    cmap_xi.set_bad(alpha=0)
+    overlay = None
+    if xi is not None:
+        # Compute edges (to overlay to heatmaps later)
+        xi_greyscale = xi if len(xi.shape) == 2 else np.mean(xi, axis=-1)
+        in_image_upscaled = transform.rescale(xi_greyscale, dilation, mode='constant')
+        edges = feature.canny(in_image_upscaled).astype(float)
+        edges[edges < 0.5] = np.nan
+        edges[:5, :] = np.nan
+        edges[-5:, :] = np.nan
+        edges[:, :5] = np.nan
+        edges[:, -5:] = np.nan
+        overlay = edges
+
+    abs_max = np.percentile(np.abs(data), percentile)
+    abs_min = abs_max
+
+    if len(data.shape) == 3:
+        data = np.mean(data, 2)
+    axis.imshow(data, extent=extent, interpolation='none', cmap=cmap, vmin=-abs_min, vmax=abs_max)
+    if overlay is not None:
+        axis.imshow(overlay, extent=extent, interpolation='none', cmap=cmap_xi, alpha=alpha)
+    axis.axis('off')
+    return axis

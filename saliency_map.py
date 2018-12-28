@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import saliency
 import argparse
 import sys
+from utils import plot
 
 def parse_arguments(argv):
     parser = argparse.ArgumentParser()
@@ -47,7 +48,7 @@ def main(args):
     # img_path = './picture/dog_cat.jpg'
     # img_label_path = 'imagenet.json'
     # true_class = 208
-    sess, graph, img_size, images_pl, logits = load_pretrain_model(model_name)
+    sess, graph, img_size, images_pl, logits = load_pretrain_model(model_name,is_explain=True)
     y_label = tf.placeholder(dtype=tf.int32,shape=())
     label_logits = logits[0,y_label]
 
@@ -60,14 +61,71 @@ def main(args):
         img = preprocess_img(img, img_size)
         init_epoch = 0
         loss_list = []
+
     old_img = np.array(img)
     batch_img = np.expand_dims(img, 0)
+
+    #new_img = np.load('vgg16_30_0.0004_1000_0.001_0.03_4000.npy')
+    #new_batch_img = np.concatenate((np.expand_dims(new_img,0),batch_img),axis=0)
+    #new_batch_img = np.expand_dims(new_img,0)
+    #all_img = np.concatenate((batch_img,new_batch_img))
     imagenet_label = load_imagenet_label(img_label_path)
     prob = tf.nn.softmax(logits)
     _prob = sess.run(prob, feed_dict={images_pl:batch_img})[0]
-    classify(img,_prob,imagenet_label,1,1)
+    #classify(img,_prob,imagenet_label,1,1)
 
-    # attribution method 1, logits[label])/d(img_pl)
+    ####
+    #deep explain
+    # from deepexplain.tensorflow import DeepExplain
+    # label_logits = logits[0,208]
+    # with DeepExplain(session=sess) as de:
+    #     attributions = {
+    #         # Gradient-based
+    #         # NOTE: reduce_max is used to select the output unit for the class predicted by the classifier
+    #         # For an example of how to use the ground-truth labels instead, see mnist_cnn_keras notebook
+    #         'Saliency maps': de.explain('saliency', label_logits, images_pl, batch_img),
+    #         'Gradient * Input': de.explain('grad*input', label_logits, images_pl, batch_img),
+    #         # 'Integrated Gradients': de.explain('intgrad', label_logits, images_pl, new_batch_img),
+    #         'Epsilon-LRP': de.explain('elrp', label_logits, images_pl, batch_img),
+    #         'DeepLIFT (Rescale)': de.explain('deeplift', label_logits, images_pl, batch_img),
+    #         # Perturbation-based (comment out to evaluate, but this will take a while!)
+    #         #'Occlusion [15x15]':    de.explain('occlusion', label_logits, images_pl, batch_img, window_shape=(15,15,3), step=4)
+    #     }    ####
+    #     new_attributions = {
+    #         # Gradient-based
+    #         # NOTE: reduce_max is used to select the output unit for the class predicted by the classifier
+    #         # For an example of how to use the ground-truth labels instead, see mnist_cnn_keras notebook
+    #         'Saliency maps': de.explain('saliency', label_logits, images_pl, new_batch_img),
+    #         'Gradient * Input': de.explain('grad*input', label_logits, images_pl, new_batch_img),
+    #         # 'Integrated Gradients': de.explain('intgrad', label_logits, images_pl, new_batch_img),
+    #         'Epsilon-LRP': de.explain('elrp', label_logits, images_pl, new_batch_img),
+    #         'DeepLIFT (Rescale)': de.explain('deeplift', label_logits, images_pl, new_batch_img),
+    #         # Perturbation-based (comment out to evaluate, but this will take a while!)
+    #         #'Occlusion [15x15]':    de.explain('occlusion', label_logits, images_pl, batch_img, window_shape=(15,15,3), step=4)
+    #     }    ####
+    #     attributions['Saliency maps'] = np.concatenate((attributions['Saliency maps'],new_attributions['Saliency maps']),axis=0)
+    #     attributions['Gradient * Input'] = np.concatenate((attributions['Gradient * Input'],new_attributions['Gradient * Input']),axis=0)
+    #     attributions['Epsilon-LRP'] = np.concatenate((attributions['Epsilon-LRP'],new_attributions['Epsilon-LRP']),axis=0)
+    #     attributions['DeepLIFT (Rescale)'] = np.concatenate((attributions['DeepLIFT (Rescale)'],new_attributions['DeepLIFT (Rescale)']),axis=0)
+    #
+    # n_cols = int(len(attributions)) + 1
+    # n_rows = 2
+    # fig, axes = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(3 * n_cols, 3 * n_rows))
+    #
+    # for i, xi in enumerate(all_img):
+    #     # xi = (xi - np.min(xi))
+    #     # xi /= np.max(xi)
+    #     ax = axes.flatten()[i * n_cols]
+    #     ax.imshow(xi)
+    #     ax.set_title('Original')
+    #     ax.axis('off')
+    #     for j, a in enumerate(attributions):
+    #         axj = axes.flatten()[i * n_cols + j + 1]
+    #         plot(attributions[a][i], xi=xi, axis=axj, dilation=.5, percentile=99, alpha=.2).set_title(a)
+    ######
+    # with DeepExplain(session=sess) as de:
+    #     dlift = de.explain('deeplift', label_logits, images_pl, batch_img)
+
     grad_map_tensor = tf.gradients(label_logits,images_pl)[0]
     grad_map = sess.run(grad_map_tensor,feed_dict={images_pl:np.expand_dims(img,0),y_label:true_class})
 
@@ -75,8 +133,9 @@ def main(args):
     vanilla_mask_3d = gradient_saliency.GetMask(img, feed_dict={y_label:true_class}) # better
     vanilla_mask_grayscale = saliency.VisualizeImageGrayscale(vanilla_mask_3d)
 
-    smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(img, feed_dict={y_label:true_class}) # much clear, 2204/2192
-    smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(smoothgrad_mask_3d)
+    # smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(img, feed_dict={y_label:true_class}) # much clear, 2204/2192
+    # smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(smoothgrad_mask_3d)
+
     #
     # new_img = np.load('vgg16_60_70_35_45_30_0.0001_800_0.0_0.0_9000.npy')
     # new_grad_map = sess.run(grad_map_tensor,feed_dict={images_pl:np.expand_dims(new_img,0),y_label:true_class})
@@ -85,8 +144,10 @@ def main(args):
     # new_smoothgrad_mask_3d = gradient_saliency.GetSmoothedMask(new_img, feed_dict={y_label:true_class}) # much clear, 2204/2192
     # new_smoothgrad_mask_grayscale = saliency.VisualizeImageGrayscale(new_smoothgrad_mask_3d)
 
-    to_dec_center = (60,70)
-    to_dec_radius = (35,45)
+    #to_dec_center = (60,70)
+    to_dec_center = (100,65)
+    #to_dec_radius = (35,45)
+    to_dec_radius = (80,60)
     to_inc_center = (120,170)
     to_inc_radius = (40,30)
     _map = vanilla_mask_grayscale
@@ -128,14 +189,12 @@ def main(args):
     # try NES (Natural evolutionary strategies)
     N = args.N
     sigma = args.sigma
-    epsilon = args.eps
+    epsilon = round(args.eps,1)
     epoch = args.epoch
     eta = args.lr
-    #loss = -lambda_up*to_inc_region+lambda_down*to_dec_region
     loss = to_dec_region/to_inc_region
     old_loss = sess.run(loss,feed_dict={images_pl: np.expand_dims(img, 0), y_label: true_class})
-    #eta = 0.01/abs(old_loss)
-    num_list = '_'.join([model_name, str(N), str(eta), str(epoch), str(sigma), str(epsilon)])
+    num_list = '_'.join(['big',model_name, str(N), str(eta), str(epoch), str(sigma), str(epsilon)])
     print(num_list)
     for i in range(epoch):
         delta = np.random.randn(int(N/2),img_size*img_size*3)
@@ -264,3 +323,6 @@ if __name__ == "__main__":
 
 ################################
 # meaningful perturbation
+
+##########
+# deep explain
