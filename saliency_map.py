@@ -65,7 +65,7 @@ def main(args):
     imagenet_label = load_imagenet_label(img_label_path)
     prob = tf.nn.softmax(logits)
     _prob = sess.run(prob, feed_dict={images_pl:batch_img})[0]
-    classify(img,_prob,imagenet_label,1,1)
+    #classify(img,_prob,imagenet_label,1,1)
 
     # attribution method 1, logits[label])/d(img_pl)
     grad_map_tensor = tf.gradients(label_logits,images_pl)[0]
@@ -97,53 +97,28 @@ def main(args):
     to_dec_region = calculate_img_region_importance(grad_map_tensor, to_dec_center, to_dec_radius)
     to_inc_region = calculate_img_region_importance(grad_map_tensor, to_inc_center, to_inc_radius)
 
-    # finite difference
-    # delta = 0.1
-    # update_grad = np.zeros((img_size,img_size,3))
-    # epoch = 3
-    # k = 0
-    # while epoch > 0:
-    #     for i in range(135,145):
-    #         for j in range(135,145):
-    #             print(i,j,k)
-    #             img_plus_value = min(img[i,j,k]+delta,1)
-    #             img_minus_value = max(img[i,j,k]-delta,0)
-    #             img_plus = np.array(img)
-    #             img_plus[i,j,k] = img_plus_value
-    #             img_minus = np.array(img)
-    #             img_minus[i,j,k] = img_minus_value
-    #             loss_plus = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img_plus,0),y_label:285})
-    #             loss_minus = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img_minus,0),y_label:285})
-    #             value = (loss_plus-loss_minus)/(2*(img_plus_value-img_minus_value))
-    #             print(value)
-    #             update_grad[i,j,k] = value
-    #     new_img = np.clip(img-0.1*update_grad,0,1)
-    #     new_loss,new_logits = sess.run([to_dec_region,logits],feed_dict={images_pl:np.expand_dims(new_img,0),y_label:285})
-    #     old_loss,old_logits = sess.run([to_dec_region,logits],feed_dict={images_pl:np.expand_dims(old_img,0),y_label:285})
-    #     print("new:{} ,{}".format(new_loss,np.argmax(new_logits)))
-    #     print("old:{}, {}".format(old_loss,np.argmax(old_logits)))
-    #     img=new_img
-    #     epoch -= 1
-
     # try NES (Natural evolutionary strategies)
     N = args.N
     sigma = args.sigma
     epsilon = args.eps
     epoch = args.epoch
     eta = args.lr
-    #loss = -lambda_up*to_inc_region+lambda_down*to_dec_region
     loss = to_dec_region/to_inc_region
     old_loss = sess.run(loss,feed_dict={images_pl: np.expand_dims(img, 0), y_label: true_class})
-    #eta = 0.01/abs(old_loss)
     num_list = '_'.join([model_name, str(N), str(eta), str(epoch), str(sigma), str(epsilon)])
     print(num_list)
+    # add gaussian noise
+    stdev_spread = .05
+    stdev = stdev_spread * (np.max(old_img) - np.min(old_img))
     for i in range(epoch):
+        noise = np.random.normal(0, stdev, old_img.shape)
+        noise_img = old_img + noise
         delta = np.random.randn(int(N/2),img_size*img_size*3)
         delta = np.concatenate((delta,-delta),axis=0)
         grad_sum = 0
         f_value_list = []
         for idelta in delta:
-            img_plus = np.clip(img+sigma*idelta.reshape(img_size,img_size,3),0,1)
+            img_plus = np.clip(noise_img+sigma*idelta.reshape(img_size,img_size,3),0,1)
             f_value = sess.run(loss,feed_dict={images_pl:np.expand_dims(img_plus,0),y_label:true_class})
             f_value_list.append(f_value)
             grad_sum += f_value*idelta.reshape(img_size,img_size,3)
