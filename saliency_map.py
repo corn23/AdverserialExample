@@ -14,8 +14,8 @@ def parse_arguments(argv):
     parser.add_argument("--true_label", type=int, help='the groundtruth class for input image', required=False, default=208)
     parser.add_argument("--adv_label", type=int, help='specify the target adversarial label', default=100)
     parser.add_argument("--epoch", type=int, help="specify the training epochs", default=100)
-    parser.add_argument("--eps", type=float, help="specify the degree of disturb", default=8/255)
-    parser.add_argument("--lr", type=float, help="specify the learning rate", default=0.0001)
+    parser.add_argument("--eps", type=float, help="specify the degree of disturb", default=0.003)
+    parser.add_argument("--lr", type=float, help="specify the learning rate", default=0.0005)
     parser.add_argument("--lambda_up", type=float, help="specify the lambda for increasing gradient in the given region", default=1)
     parser.add_argument("--lambda_down", type=float, help="specify the lambda for lowering gradient in the given region", default=0)
     parser.add_argument("--lambda_label_loss", type=float, help="specify the lambda for the crossentropy loss of classifying wrong label", default=10)
@@ -26,10 +26,14 @@ def parse_arguments(argv):
     parser.add_argument("--image_interval", type=int, help="write image into summary every *image_interval*",default=5)
     parser.add_argument("-N", type=int,help="specify the number vectors in NES", default=30)
     parser.add_argument("--imp",help="specify a path for intermediate image",default='')
-    parser.add_argument("--sigma", type=float,help="specify sigma vector in NES", default=0.001)
+    parser.add_argument("--sigma", type=float, help="specify sigma vector in NES", default=0.001)
+    parser.add_argument("--beta", type=float, help="beta for momentum", default=0.9)
+    parser.add_argument("--alpha", type=float, help="alpha for annealing", default=0.99)
+    parser.add_argument("--is_big",help="indicate if work on cluster so that graphic function is not available", action="store_true", required=False, default=False)
 
     pargs = parser.parse_args(argv)
     return pargs
+
 
 def main(args):
     for arg in vars(args):
@@ -43,10 +47,6 @@ def main(args):
     label_num = args.label_num
     lambda_up, lambda_down, lambda_label_loss = args.lambda_up, args.lambda_down,args.lambda_label_loss
 
-    # model_name = 'inception_v3'
-    # img_path = './picture/dog_cat.jpg'
-    # img_label_path = 'imagenet.json'
-    # true_class = 208
     sess, graph, img_size, images_pl, logits = load_pretrain_model(model_name)
     y_label = tf.placeholder(dtype=tf.int32,shape=())
     label_logits = logits[0,y_label]
@@ -65,7 +65,6 @@ def main(args):
     imagenet_label = load_imagenet_label(img_label_path)
     prob = tf.nn.softmax(logits)
     _prob = sess.run(prob, feed_dict={images_pl:batch_img})[0]
-    classify(img,_prob,imagenet_label,1,1)
 
     # attribution method 1, logits[label])/d(img_pl)
     grad_map_tensor = tf.gradients(label_logits,images_pl)[0]
@@ -87,8 +86,13 @@ def main(args):
 
     to_dec_center = (60,70)
     to_dec_radius = (35,45)
+    # big region
+    if args.is_big:
+        to_dec_center = (100,65)
+        to_dec_radius = (80,60)
     to_inc_center = (120,170)
     to_inc_radius = (40,30)
+
     _map = vanilla_mask_grayscale
     print(calculate_region_importance(_map, to_dec_center, to_dec_radius))
     print(calculate_region_importance(_map, to_inc_center, to_inc_radius))
@@ -97,45 +101,21 @@ def main(args):
     to_dec_region = calculate_img_region_importance(grad_map_tensor, to_dec_center, to_dec_radius)
     to_inc_region = calculate_img_region_importance(grad_map_tensor, to_inc_center, to_inc_radius)
 
-    # finite difference
-    # delta = 0.1
-    # update_grad = np.zeros((img_size,img_size,3))
-    # epoch = 3
-    # k = 0
-    # while epoch > 0:
-    #     for i in range(135,145):
-    #         for j in range(135,145):
-    #             print(i,j,k)
-    #             img_plus_value = min(img[i,j,k]+delta,1)
-    #             img_minus_value = max(img[i,j,k]-delta,0)
-    #             img_plus = np.array(img)
-    #             img_plus[i,j,k] = img_plus_value
-    #             img_minus = np.array(img)
-    #             img_minus[i,j,k] = img_minus_value
-    #             loss_plus = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img_plus,0),y_label:285})
-    #             loss_minus = sess.run(to_dec_region,feed_dict={images_pl:np.expand_dims(img_minus,0),y_label:285})
-    #             value = (loss_plus-loss_minus)/(2*(img_plus_value-img_minus_value))
-    #             print(value)
-    #             update_grad[i,j,k] = value
-    #     new_img = np.clip(img-0.1*update_grad,0,1)
-    #     new_loss,new_logits = sess.run([to_dec_region,logits],feed_dict={images_pl:np.expand_dims(new_img,0),y_label:285})
-    #     old_loss,old_logits = sess.run([to_dec_region,logits],feed_dict={images_pl:np.expand_dims(old_img,0),y_label:285})
-    #     print("new:{} ,{}".format(new_loss,np.argmax(new_logits)))
-    #     print("old:{}, {}".format(old_loss,np.argmax(old_logits)))
-    #     img=new_img
-    #     epoch -= 1
-
     # try NES (Natural evolutionary strategies)
     N = args.N
     sigma = args.sigma
     epsilon = args.eps
     epoch = args.epoch
     eta = args.lr
-    #loss = -lambda_up*to_inc_region+lambda_down*to_dec_region
+    beta = args.beta
+    alpha = args.alpha
     loss = to_dec_region/to_inc_region
     old_loss = sess.run(loss,feed_dict={images_pl: np.expand_dims(img, 0), y_label: true_class})
-    #eta = 0.01/abs(old_loss)
-    num_list = '_'.join([model_name, str(N), str(eta), str(epoch), str(sigma), str(epsilon)])
+    if args.is_big:
+        num_list = '_'.join(['big', model_name, str(N), str(eta), str(epoch), str(sigma), str(epsilon)])
+    else:
+        num_list = '_'.join([model_name, str(N), str(eta), str(epoch), str(sigma), str(epsilon)])
+    last_grad_sum = 0
     print(num_list)
     for i in range(epoch):
         delta = np.random.randn(int(N/2),img_size*img_size*3)
@@ -148,6 +128,11 @@ def main(args):
             f_value_list.append(f_value)
             grad_sum += f_value*idelta.reshape(img_size,img_size,3)
         grad_sum = grad_sum/(N*sigma)
+        if i > 0:
+            grad_sum = beta*last_grad_sum + (1-beta)*grad_sum
+            if i % 50 == 0:
+                eta *= alpha
+        last_grad_sum = grad_sum
         new_img = np.clip(np.clip(img-eta*grad_sum,old_img-epsilon,old_img+epsilon),0,1)
         new_loss, new_logits = sess.run([loss, logits],
                                         feed_dict={images_pl: np.expand_dims(new_img, 0), y_label: true_class})
