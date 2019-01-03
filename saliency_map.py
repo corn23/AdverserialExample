@@ -112,7 +112,7 @@ def main(args):
     loss = to_dec_region/to_inc_region
     old_loss = sess.run(loss,feed_dict={images_pl: np.expand_dims(img, 0), y_label: true_class})
     if args.is_big:
-        num_list = '_'.join(['big', model_name, str(N), str(eta), str(epoch), str(sigma), str(epsilon),str(alpha),str(beta)+str(true_class)])
+        num_list = '_'.join(['big', model_name, str(N), str(eta), str(epoch), str(sigma), str(epsilon),str(alpha),str(beta),str(true_class)])
     else:
         num_list = '_'.join([model_name, str(N), str(eta), str(epoch), str(sigma), str(epsilon),str(alpha),str(beta)])
     last_grad_sum = 0
