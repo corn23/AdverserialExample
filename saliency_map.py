@@ -140,10 +140,9 @@ def main(args):
         print("epoch:{} new:{}, {}, old:{}, {}".format(i, new_loss, np.argmax(new_logits), old_loss, np.argmax(_prob)))
         sys.stdout.flush()
         img = np.array(new_img)
-        if i % args.image_interval ==0:
+        if i % args.image_interval == 0 and i >0:
             temp_name = num_list+'_'+str(i+init_epoch)
             np.save(temp_name,new_img)
-        if i % args.image_interval == 0:
             np.save('loss_'+temp_name,loss_list)
     np.save(num_list+'_'+str(epoch+init_epoch),new_img)
     np.save('loss_'+num_list+'_'+str(epoch+init_epoch),loss_list)
