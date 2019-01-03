@@ -131,12 +131,12 @@ axes[1,1].axis('off')
 
 
 # plot loss
-loss1 = np.load('loss_big_vgg16_30_0.0004_1000_0.001_0.03_0.99_0.0_1000.npy').reshape(1000,1)
-loss2 = np.load('loss_big_vgg16_30_0.0004_1000_0.001_0.03_0.99_0.9_1000.npy').reshape(1000,1)
-loss3 = np.load('loss_big_vgg16_30_0.0004_1000_0.001_0.03_1.0_0.0_1000.npy').reshape(1000,1)
-loss4 = np.load('loss_big_vgg16_30_0.0004_1000_0.001_0.03_1.0_0.9_1000.npy').reshape(1000,1)
+#loss1 = np.load('loss_big_vgg16_30_0.0004_1000_0.001_0.03_0.99_0_1000_208.npy').reshape(500,1)
+loss2 = np.load('loss_big_vgg16_30_0.0004_1000_0.001_0.03_0.99_0.9_1000_208.npy').reshape(1000,1)
+loss3 = np.load('loss_big_vgg16_30_0.0004_1000_0.001_0.03_1_0_1000_208.npy').reshape(1000,1)
+loss4 = np.load('loss_big_vgg16_30_0.0004_1000_0.001_0.03_1_0.9_1000_208.npy').reshape(1000,1)
 
 
-final_loss = np.concatenate((loss1,loss2,loss3,loss4),axis=1)
+final_loss = np.concatenate((loss2,loss3,loss4),axis=1)
 plt.plot(final_loss)
-plt.legend(['alpha=0.99,beta=0','alpha=0.99,beta=0.9','alpha=1,beta=0','alpha=1,beta=0.9'])
+plt.legend(['alpha=0.99,beta=0.9','alpha=1,beta=0','alpha=1,beta=0.9'])
